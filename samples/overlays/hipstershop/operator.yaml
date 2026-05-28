@@ -57,27 +57,11 @@ spec:
       serviceAccountName: resiliencebench-operator
       containers:
       - name: resiliencebench-operator
-        image: ghcr.io/cmendesce/resilience-bench-operator/resiliencebench-operator:5e40ec29c110622fcba824ac403fd39c555405b3
-        imagePullPolicy: Always
+        image: resiliencebench-operator:local
+        imagePullPolicy: IfNotPresent
         env:
         - name: STORAGE_TYPE
-          value: "cloud"
-        - name: AWS_BUCKET_NAME
-          value: "phd-carlos-results"
-        - name: AWS_REGION
-          value: "us-east-1"
-        - name: AWS_REGION
-          value: "us-east-1"
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: aws-credentials
-              key: access-key-id
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: aws-credentials
-              key: secret-access-key
+          value: "local"
         # ports:
         # - containerPort: 8080
         volumeMounts:

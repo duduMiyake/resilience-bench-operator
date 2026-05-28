@@ -11,11 +11,6 @@ configMapGenerator:
   files:
   - k6.js
 
-secretGenerator:
-- name: aws-credentials
-  envs:
-  - aws.env
-
 resources:
   - namespace.yaml 
   - benchmark.yaml

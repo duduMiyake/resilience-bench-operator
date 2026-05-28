@@ -16,6 +16,7 @@ metadata:
   name: paymentservice
   annotations:
     resiliencebench.io/envoy-service: paymentservice
+    resiliencebench.io/container: "envoy"
 spec:
   selector:
     matchLabels:
@@ -120,64 +121,64 @@ spec:
 apiVersion: resiliencebench.io/v1beta1
 kind: Workload
 metadata:
-  name: fixed-iterations-loadtest
+  name: k6-loadtest
 spec:
   options:
     - name: K6_ITERATIONS
-      value: "1000"
+      value: "3000"
     - name: K6_NO_THRESHOLDS
       value: "true"
-    - name: AWS_REGION
-      value: "us-east-1"
-    - name: AWS_ACCESS_KEY_ID
-      value: some-value
-    - name: AWS_SECRET_ACCESS_KEY
-      value: some-value
-    - name: BUCKET_NAME
-      value: phd-carlos-results
   script:
     configMap:
       name: k6-config
       file: k6.js
-  users: [50, 100, 150]
+  users: [300, 500]
 ---
 apiVersion: resiliencebench.io/v1beta1
 kind: Benchmark
 metadata:
   name: hipstershop
 spec:
-  workload: fixed-iterations-loadtest
+  workload: k6-loadtest
+  strategy:
+    type: randomSampling
+    seed: 42
+    maxScenarios: 250
   scenarios:
-    - name: payment-fault
+    - name: retry-checkout
       fault:
         provider: envoy
         percentages: [25, 50, 75]
         services:
-         - paymentservice
+          - paymentservice
+          - checkoutservice
       connectors:
-        - name: checkout-payment
+        - name: retry-frontend-checkout
           source:
-            name: checkoutservice
+            name: frontendservice
+            envs:
+              - name: GRPC_MAX_ATTEMPTS
+                value: ["2", "3", "4", "5"]
+              - name: GRPC_INITIAL_BACKOFF
+                value: ["0.5s", "1s", "1.5s"]
+              - name: GRPC_MAX_BACKOFF
+                value: ["15s"]
+              - name: GRPC_BACKOFF_MULTIPLIER
+                value: ["1", "1.5", "2.0"]
           destination:
-            name: paymentservice
-    - name: payment-fault-retry
-      fault:
-        provider: envoy
-        percentages: [25, 50, 75]
-        services:
-         - paymentservice
-      connectors:
-        - name: checkout-payment
+            name: checkoutservice
+
+        - name: retry-checkout-payment
           source:
             name: checkoutservice
             envs:
-            - name: GRPC_MAX_ATTEMPTS
-              value: ["1", "3", "5"]
-            - name: GRPC_INITIAL_BACKOFF
-              value: ["0.1s", "0.3s", "0.5s"]
-            - name: GRPC_MAX_BACKOFF
-              value: ["15s"]
-            - name: GRPC_BACKOFF_MULTIPLIER
-              value: ["1.1", "1.2", "1.5"]
+              - name: GRPC_MAX_ATTEMPTS
+                value: ["2", "3", "4", "5"]
+              - name: GRPC_INITIAL_BACKOFF
+                value: ["0.5s", "1s", "1.5s"]
+              - name: GRPC_MAX_BACKOFF
+                value: ["15s"]
+              - name: GRPC_BACKOFF_MULTIPLIER
+                value: ["1", "1.5", "2.0"]
           destination:
             name: paymentservice
