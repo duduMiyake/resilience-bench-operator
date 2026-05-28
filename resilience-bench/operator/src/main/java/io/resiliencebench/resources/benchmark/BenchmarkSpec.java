@@ -10,6 +10,9 @@ public class BenchmarkSpec {
   @JsonPropertyDescription("The workload name to be used for the benchmark")
   private String workload;
 
+  @JsonPropertyDescription("The strategy used to select scenarios for execution")
+  private ScenarioSelectionStrategySpec strategy;
+
   @JsonPropertyDescription("The set of scenarios templates to be processed and then generated as scenarios")
   private List<ScenarioTemplate> scenarios = new ArrayList<>();
 
@@ -22,8 +25,17 @@ public class BenchmarkSpec {
     this.scenarios = scenarioTemplates;
   }
 
+  public BenchmarkSpec(String workload, ScenarioSelectionStrategySpec strategy, List<ScenarioTemplate> scenarioTemplates) {
+    this(workload, scenarioTemplates);
+    this.strategy = strategy;
+  }
+
   public String getWorkload() {
     return workload;
+  }
+
+  public ScenarioSelectionStrategySpec getStrategy() {
+    return strategy;
   }
 
   public List<ScenarioTemplate> getScenarios() {

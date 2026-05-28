@@ -14,8 +14,10 @@ import io.resiliencebench.resources.ExecutionQueueFactory;
 import io.resiliencebench.resources.ScenarioFactory;
 import io.resiliencebench.resources.benchmark.Benchmark;
 import io.resiliencebench.resources.benchmark.BenchmarkStatus;
+import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.queue.ExecutionQueue;
 import io.resiliencebench.resources.scenario.Scenario;
+import io.resiliencebench.resources.selection.ScenarioSelectionStrategySelector;
 import io.resiliencebench.resources.workload.Workload;
 import io.resiliencebench.support.CustomResourceRepository;
 
@@ -30,15 +32,18 @@ public class BenchmarkController implements Reconciler<Benchmark> {
   private final CustomResourceRepository<ExecutionQueue> queueRepository;
 
   private final QueueExecutor queueExecutor;
+  private final ScenarioSelectionStrategySelector scenarioSelectionStrategySelector;
 
   public BenchmarkController(QueueExecutor queueExecutor,
                              CustomResourceRepository<Scenario> scenarioRepository,
                              CustomResourceRepository<Workload> workloadRepository,
-                             CustomResourceRepository<ExecutionQueue> queueRepository) {
+                             CustomResourceRepository<ExecutionQueue> queueRepository,
+                             ScenarioSelectionStrategySelector scenarioSelectionStrategySelector) {
     this.queueExecutor = queueExecutor;
     this.scenarioRepository = scenarioRepository;
     this.workloadRepository = workloadRepository;
     this.queueRepository = queueRepository;
+    this.scenarioSelectionStrategySelector = scenarioSelectionStrategySelector;
   }
 
   // Considering only creation and update events. if something changes in benchmark, we need to re-run the scenarios
@@ -50,7 +55,17 @@ public class BenchmarkController implements Reconciler<Benchmark> {
       return UpdateControl.noUpdate();
     }
 
-    var scenariosList = createScenarios(benchmark, workload.get());
+    List<Scenario> scenariosList;
+    try {
+      scenariosList = createScenariosForQueue(benchmark, workload.get());
+    } catch (IllegalArgumentException e) {
+      logger.error("Invalid scenario selection strategy for benchmark {}. {}",
+              benchmark.getMetadata().getName(),
+              e.getMessage());
+      benchmark.setStatus(new BenchmarkStatus(0, e.getMessage()));
+      return UpdateControl.updateStatus(benchmark);
+    }
+
     if (scenariosList.isEmpty()) {
       logger.error("No scenarios generated for benchmark {}", benchmark.getMetadata().getName());
       return UpdateControl.noUpdate();
@@ -67,18 +82,47 @@ public class BenchmarkController implements Reconciler<Benchmark> {
     return UpdateControl.updateStatus(benchmark);
   }
 
-  private List<Scenario> createScenarios(Benchmark benchmark, Workload workload) {
+  private List<Scenario> createScenariosForQueue(Benchmark benchmark, Workload workload) {
     scenarioRepository.deleteAll(benchmark.getMetadata().getNamespace()); // TODO we don't support (yet) multiple reconciles loops
 
-    var scenariosList = ScenarioFactory.create(benchmark, workload);
-    scenariosList.forEach(scenarioRepository::create);
+    var allScenarios = ScenarioFactory.create(benchmark, workload);
+    var selectedStrategy = scenarioSelectionStrategySelector.select(benchmark);
+    var scenariosList = selectedStrategy.selectScenarios(allScenarios, benchmark, workload);
+    logStrategySelection(benchmark, allScenarios.size(), scenariosList.size());
+
+    if (scenarioSelectionStrategySelector.selectAdaptive(benchmark).isPresent()) {
+      allScenarios.forEach(scenarioRepository::create);
+    } else {
+      scenariosList.forEach(scenarioRepository::create);
+    }
     return scenariosList;
   }
 
-  private ExecutionQueue prepareToRunScenarios(Benchmark benchmark, List<Scenario> scenariosList) {
-    scenarioRepository.deleteAll(benchmark.getMetadata().getNamespace());
-    scenariosList.forEach(scenarioRepository::create);
+  private void logStrategySelection(Benchmark benchmark, int totalScenarios, int selectedScenarios) {
+    var strategy = benchmark.getSpec().getStrategy();
+    var strategyType = strategy == null || strategy.getType() == null || strategy.getType().isBlank()
+            ? ScenarioSelectionStrategySpec.EXHAUSTIVE
+            : strategy.getType();
+    var seed = strategy == null || strategy.getSeed() == null ? ScenarioSelectionStrategySpec.DEFAULT_SEED : strategy.getSeed();
+    var sampleRate = strategy == null || strategy.getSampleRate() == null ? null : strategy.getSampleRate();
+    var maxScenarios = strategy == null || strategy.getMaxScenarios() == null ? null : strategy.getMaxScenarios();
+    var initialSamples = strategy == null || strategy.getInitialSamples() == null ? null : strategy.getInitialSamples();
+    var maxEvaluations = strategy == null || strategy.getMaxEvaluations() == null ? null : strategy.getMaxEvaluations();
+    var acquisitionFunction = strategy == null || strategy.getAcquisitionFunction() == null ? null : strategy.getAcquisitionFunction();
 
+    logger.info("Scenario selection strategy={} totalPossibleScenarios={} selectedScenarios={} seed={} sampleRate={} maxScenarios={} initialSamples={} maxEvaluations={} acquisitionFunction={}",
+            strategyType,
+            totalScenarios,
+            selectedScenarios,
+            seed,
+            sampleRate,
+            maxScenarios,
+            initialSamples,
+            maxEvaluations,
+            acquisitionFunction);
+  }
+
+  private ExecutionQueue prepareToRunScenarios(Benchmark benchmark, List<Scenario> scenariosList) {
     queueRepository.deleteAll(benchmark.getMetadata().getNamespace());
     var queueCreated = ExecutionQueueFactory.create(benchmark, scenariosList);
     return queueRepository.create(queueCreated);

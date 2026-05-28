@@ -168,12 +168,57 @@ spec:
                       type: string
                   type: object
                 type: array
+              strategy:
+                description: The strategy used to select scenarios for execution
+                properties:
+                  acquisitionFunction:
+                    description: Acquisition function used by bayesianOptimization.
+                      Currently supports expectedImprovement
+                    type: string
+                  initialSamples:
+                    description: Number of initial space-filling samples for bayesianOptimization
+                    type: integer
+                  maxEvaluations:
+                    description: Maximum number of scenario evaluations for bayesianOptimization
+                    type: integer
+                  maxScenarios:
+                    description: Maximum number of scenarios to select
+                    type: integer
+                  objective:
+                    description: Objective metrics used to compare evaluated scenarios
+                    properties:
+                      maximize:
+                        description: Metrics that should be maximized
+                        items:
+                          type: string
+                        type: array
+                      minimize:
+                        description: Metrics that should be minimized
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  sampleRate:
+                    description: "Fraction of scenarios to select. Valid range is\
+                      \ (0, 1]"
+                    type: number
+                  seed:
+                    description: Seed used by randomSampling for reproducible scenario
+                      selection
+                    type: integer
+                  type:
+                    description: "The scenario selection strategy type: exhaustive,\
+                      \ randomSampling or bayesianOptimization"
+                    type: string
+                type: object
               workload:
                 description: The workload name to be used for the benchmark
                 type: string
             type: object
           status:
             properties:
+              message:
+                type: string
               totalScenarios:
                 type: integer
             type: object
