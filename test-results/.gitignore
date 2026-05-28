@@ -1,3 +1,6 @@
 *
 !.gitignore
 !.gitkeep
+!randomSampling/
+!randomSampling/*.csv
+!randomSampling/*.png
