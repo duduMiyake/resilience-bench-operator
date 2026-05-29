@@ -34,4 +34,11 @@ Temporary Items
 # iCloud generated files
 *.icloud
 
+experiments/
+
 # End of https://www.toptal.com/developers/gitignore/api/macos
+
+# Local/dev-only files
+LOCAL_RUN
+kind-local-config
+test-results/

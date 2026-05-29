@@ -79,26 +79,3 @@ spec:
   scenarios:
     []
 ```
-
-## Comparing strategies
-
-Run an `exhaustive` benchmark as the baseline, then run one or more `randomSampling` benchmarks with fixed seeds.
-
-Useful comparisons:
-
-- Number of executed scenarios.
-- Total execution time.
-- Best scenario found by each strategy.
-- Top-k overlap between exhaustive and sampled rankings.
-- Regret, such as the difference between the best sampled result and the best exhaustive result.
-
-## Local experiment folders
-
-Store local experiment outputs under `experiments/`, which is ignored by git:
-
-```text
-experiments/onlineboutique/exhaustive/
-experiments/onlineboutique/random-sampling/
-```
-
-Do not commit raw benchmark results. Keep only documentation, scripts, or summaries that are intended to be shared.
