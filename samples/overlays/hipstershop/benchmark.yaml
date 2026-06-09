@@ -132,7 +132,7 @@ spec:
     configMap:
       name: k6-config
       file: k6.js
-  users: [300, 500]
+  users: [300]
 ---
 apiVersion: resiliencebench.io/v1beta1
 kind: Benchmark
@@ -143,12 +143,12 @@ spec:
   strategy:
     type: randomSampling
     seed: 42
-    maxScenarios: 250
+    maxScenarios: 100
   scenarios:
     - name: retry-checkout
       fault:
         provider: envoy
-        percentages: [25, 50, 75]
+        percentages: [50]
         services:
           - paymentservice
           - checkoutservice

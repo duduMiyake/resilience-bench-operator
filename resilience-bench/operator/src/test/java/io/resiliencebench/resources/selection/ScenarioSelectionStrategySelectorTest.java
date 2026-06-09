@@ -12,8 +12,11 @@ class ScenarioSelectionStrategySelectorTest {
 
   private final ExhaustiveScenarioSelectionStrategy exhaustive = new ExhaustiveScenarioSelectionStrategy();
   private final RandomSamplingScenarioSelectionStrategy randomSampling = new RandomSamplingScenarioSelectionStrategy();
-  private final BayesianOptimizationScenarioSelectionStrategy bayesianOptimization = new BayesianOptimizationScenarioSelectionStrategy();
-  private final ScenarioSelectionStrategySelector selector = new ScenarioSelectionStrategySelector(exhaustive, randomSampling, bayesianOptimization);
+  private final KnnAdaptiveScenarioSelectionStrategy knnAdaptive = new KnnAdaptiveScenarioSelectionStrategy();
+  private final ScenarioSelectionStrategySelector selector = new ScenarioSelectionStrategySelector(
+          exhaustive,
+          randomSampling,
+          knnAdaptive);
 
   @Test
   void should_select_exhaustive_by_default_when_strategy_is_absent() {
@@ -43,14 +46,14 @@ class ScenarioSelectionStrategySelectorTest {
   }
 
   @Test
-  void should_select_bayesian_optimization_when_type_is_bayesian_optimization() {
+  void should_select_knn_adaptive_when_type_is_knn_adaptive() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec(
-            "bayesianOptimization", null, null, 42L,
-            20, 100, "expectedImprovement", null));
+            "knnAdaptive", null, null, 42L,
+            20, 100, null, 3, 0.1));
 
     var selectedStrategy = selector.select(benchmark);
 
-    assertSame(bayesianOptimization, selectedStrategy);
+    assertSame(knnAdaptive, selectedStrategy);
   }
 
   @Test
@@ -83,8 +86,8 @@ class ScenarioSelectionStrategySelectorTest {
   @Test
   void should_fail_for_invalid_initial_samples() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec(
-            "bayesianOptimization", null, null, null,
-            0, 100, "expectedImprovement", null));
+            "knnAdaptive", null, null, null,
+            0, 100, null, 3, 0.1));
 
     var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
 
@@ -94,8 +97,8 @@ class ScenarioSelectionStrategySelectorTest {
   @Test
   void should_fail_when_initial_samples_is_greater_than_max_evaluations() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec(
-            "bayesianOptimization", null, null, null,
-            101, 100, "expectedImprovement", null));
+            "knnAdaptive", null, null, null,
+            101, 100, null, 3, 0.1));
 
     var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
 
@@ -103,14 +106,25 @@ class ScenarioSelectionStrategySelectorTest {
   }
 
   @Test
-  void should_fail_for_unknown_acquisition_function() {
+  void should_fail_for_invalid_neighbors() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec(
-            "bayesianOptimization", null, null, null,
-            20, 100, "probabilityOfImprovement", null));
+            "knnAdaptive", null, null, null,
+            20, 100, null, 0, 0.1));
 
     var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
 
-    assertEquals("strategy.acquisitionFunction must be expectedImprovement", exception.getMessage());
+    assertEquals("strategy.neighbors must be greater than 0", exception.getMessage());
+  }
+
+  @Test
+  void should_fail_for_invalid_exploration_weight() {
+    var benchmark = benchmark(new ScenarioSelectionStrategySpec(
+            "knnAdaptive", null, null, null,
+            20, 100, null, 3, -0.1));
+
+    var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
+
+    assertEquals("strategy.explorationWeight must be greater than or equal to 0", exception.getMessage());
   }
 
   private Benchmark benchmark(ScenarioSelectionStrategySpec strategySpec) {

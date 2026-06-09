@@ -10,6 +10,7 @@ import io.resiliencebench.resources.workload.Workload;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +33,7 @@ public class K6JobFactory {
             .endMetadata()
             .withNewSpec()
             .withRestartPolicy("Never")
+            .withNodeSelector(resolveNodeSelector())
             .withContainers(createK6Container(scenario.getSpec().getWorkload(), workload, executionQueueItem))
             .withVolumes(createResultsVolume(), createScriptVolume(workload))
             .endSpec()
@@ -61,6 +63,22 @@ public class K6JobFactory {
       envs.add(new EnvVar(item.getName(), item.getValue().asText(), null));
     }
     return envs;
+  }
+
+  private Map<String, String> resolveNodeSelector() {
+    var rawNodeSelector = System.getenv("K6_NODE_SELECTOR");
+    if (rawNodeSelector == null || rawNodeSelector.isBlank()) {
+      return null;
+    }
+
+    Map<String, String> nodeSelector = new HashMap<>();
+    for (var item : rawNodeSelector.split(",")) {
+      var pair = item.trim().split("=", 2);
+      if (pair.length == 2 && !pair[0].isBlank() && !pair[1].isBlank()) {
+        nodeSelector.put(pair[0].trim(), pair[1].trim());
+      }
+    }
+    return nodeSelector.isEmpty() ? null : nodeSelector;
   }
 
   public Container createK6Container(ScenarioWorkload scenarioWorkload, Workload workload, ExecutionQueueItem executionQueueItem) {

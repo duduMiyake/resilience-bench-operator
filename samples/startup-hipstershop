@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Script de apoio para rodar o Hipster Shop localmente com kind.
+#
+# Layout esperado do cluster:
+# - control-plane: controle do Kubernetes
+# - worker com label workload-role=app: microservicos do Hipster Shop
+# - worker com label workload-role=infra: operator, Jobs k6 e volume de resultados
+#
+# Antes de usar, garanta que o WSL tenha memoria suficiente. Exemplo de .wslconfig:
+# [wsl2]
+# memory=12GB
+# processors=12
+# swap=4GB
+#
+# Uso:
+#   ./samples/startup-hipstershop start              # cria cluster, builda imagem, aplica CRDs e deploya tudo
+#   ./samples/startup-hipstershop deploy             # aplica CRDs e overlay, sem recriar cluster nem rebuildar imagem
+#   ./samples/startup-hipstershop restart-benchmark  # limpa somente execucoes e reaplica o Benchmark
+#   ./samples/startup-hipstershop status             # mostra nodes, pods e filas
+
+CLUSTER_NAME="${CLUSTER_NAME:-resiliencebench}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+ensure_kind_cluster() {
+  mkdir -p "${ROOT_DIR}/test-results"
+
+  if kind get clusters | grep -qx "${CLUSTER_NAME}"; then
+    echo "Cluster kind '${CLUSTER_NAME}' ja existe."
+  else
+    echo "Criando cluster kind '${CLUSTER_NAME}' com worker app e worker infra..."
+    kind create cluster --name "${CLUSTER_NAME}" --config "${ROOT_DIR}/kind-local-config.yaml"
+  fi
+
+  kubectl config use-context "kind-${CLUSTER_NAME}" >/dev/null
+}
+
+build_and_load_operator() {
+  echo "Buildando imagem local do resiliencebench-operator..."
+  (cd "${ROOT_DIR}/resilience-bench" && \
+    mvn com.google.cloud.tools:jib-maven-plugin:3.4.2:dockerBuild -B \
+      -f operator/pom.xml \
+      -Djib.to.image=resiliencebench-operator:local)
+
+  echo "Carregando imagem local no kind..."
+  kind load docker-image resiliencebench-operator:local --name "${CLUSTER_NAME}"
+}
+
+deploy_hipstershop() {
+  echo "Aplicando CRDs..."
+  kubectl apply -f "${ROOT_DIR}/crd"
+
+  echo "Aplicando overlay Hipster Shop..."
+  kubectl apply -k "${ROOT_DIR}/samples/overlays/hipstershop"
+
+  echo "Aguardando Deployments do namespace hipstershop..."
+  kubectl get deployment -n hipstershop -o name | while read -r deployment; do
+    kubectl rollout status "${deployment}" -n hipstershop --timeout=5m
+  done
+}
+
+restart_benchmark() {
+  echo "Limpando somente recursos de execucao do benchmark..."
+  kubectl delete benchmark hipstershop -n hipstershop --ignore-not-found=true
+  kubectl delete scenario --all -n hipstershop --ignore-not-found=true
+  kubectl delete queue --all -n hipstershop --ignore-not-found=true
+  kubectl delete job --all -n hipstershop --ignore-not-found=true
+
+  echo "Reaplicando Benchmark e recursos declarativos do overlay..."
+  kubectl apply -k "${ROOT_DIR}/samples/overlays/hipstershop"
+}
+
+status() {
+  echo
+  echo "Nodes e labels:"
+  kubectl get nodes --show-labels
+
+  echo
+  echo "Pods do Hipster Shop por node:"
+  kubectl get pods -n hipstershop -o wide
+
+  echo
+  echo "Benchmarks, queues e jobs:"
+  kubectl get benchmark,queue,scenario,job -n hipstershop
+}
+
+case "${1:-help}" in
+  start)
+    ensure_kind_cluster
+    build_and_load_operator
+    deploy_hipstershop
+    status
+    ;;
+  deploy)
+    ensure_kind_cluster
+    deploy_hipstershop
+    status
+    ;;
+  restart-benchmark)
+    ensure_kind_cluster
+    restart_benchmark
+    status
+    ;;
+  status)
+    ensure_kind_cluster
+    status
+    ;;
+  help|--help|-h)
+    sed -n '1,28p' "$0"
+    ;;
+  *)
+    echo "Comando desconhecido: $1"
+    echo "Use: $0 start|deploy|restart-benchmark|status"
+    exit 1
+    ;;
+esac

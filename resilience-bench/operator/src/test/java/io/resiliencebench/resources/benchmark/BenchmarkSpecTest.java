@@ -47,4 +47,32 @@ class BenchmarkSpecTest {
 
     assertNull(benchmark.getSpec().getStrategy());
   }
+
+  @Test
+  void should_load_knn_adaptive_strategy_from_yaml() {
+    var benchmark = Serialization.unmarshal("""
+            apiVersion: resiliencebench.io/v1beta1
+            kind: Benchmark
+            metadata:
+              name: sample
+            spec:
+              workload: fixed-iterations-loadtest
+              strategy:
+                type: knnAdaptive
+                initialSamples: 20
+                maxEvaluations: 100
+                neighbors: 3
+                explorationWeight: 0.1
+              scenarios: []
+            """, Benchmark.class);
+
+    var strategy = benchmark.getSpec().getStrategy();
+
+    assertNotNull(strategy);
+    assertEquals("knnAdaptive", strategy.getType());
+    assertEquals(20, strategy.getInitialSamples());
+    assertEquals(100, strategy.getMaxEvaluations());
+    assertEquals(3, strategy.getNeighbors());
+    assertEquals(0.1, strategy.getExplorationWeight());
+  }
 }

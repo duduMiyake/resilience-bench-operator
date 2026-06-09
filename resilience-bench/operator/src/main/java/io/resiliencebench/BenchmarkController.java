@@ -108,9 +108,8 @@ public class BenchmarkController implements Reconciler<Benchmark> {
     var maxScenarios = strategy == null || strategy.getMaxScenarios() == null ? null : strategy.getMaxScenarios();
     var initialSamples = strategy == null || strategy.getInitialSamples() == null ? null : strategy.getInitialSamples();
     var maxEvaluations = strategy == null || strategy.getMaxEvaluations() == null ? null : strategy.getMaxEvaluations();
-    var acquisitionFunction = strategy == null || strategy.getAcquisitionFunction() == null ? null : strategy.getAcquisitionFunction();
 
-    logger.info("Scenario selection strategy={} totalPossibleScenarios={} selectedScenarios={} seed={} sampleRate={} maxScenarios={} initialSamples={} maxEvaluations={} acquisitionFunction={}",
+    logger.info("Scenario selection strategy={} totalPossibleScenarios={} selectedScenarios={} seed={} sampleRate={} maxScenarios={} initialSamples={} maxEvaluations={}",
             strategyType,
             totalScenarios,
             selectedScenarios,
@@ -118,8 +117,7 @@ public class BenchmarkController implements Reconciler<Benchmark> {
             sampleRate,
             maxScenarios,
             initialSamples,
-            maxEvaluations,
-            acquisitionFunction);
+            maxEvaluations);
   }
 
   private ExecutionQueue prepareToRunScenarios(Benchmark benchmark, List<Scenario> scenariosList) {

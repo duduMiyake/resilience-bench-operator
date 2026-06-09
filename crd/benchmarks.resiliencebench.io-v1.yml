@@ -171,18 +171,22 @@ spec:
               strategy:
                 description: The strategy used to select scenarios for execution
                 properties:
-                  acquisitionFunction:
-                    description: Acquisition function used by bayesianOptimization.
-                      Currently supports expectedImprovement
-                    type: string
+                  explorationWeight:
+                    description: Exploration bonus weight used by knnAdaptive
+                    type: number
                   initialSamples:
-                    description: Number of initial space-filling samples for bayesianOptimization
+                    description: Number of initial space-filling samples for adaptive
+                      strategies
                     type: integer
                   maxEvaluations:
-                    description: Maximum number of scenario evaluations for bayesianOptimization
+                    description: Maximum number of scenario evaluations for adaptive
+                      strategies
                     type: integer
                   maxScenarios:
                     description: Maximum number of scenarios to select
+                    type: integer
+                  neighbors:
+                    description: Number of evaluated nearest neighbors used by knnAdaptive
                     type: integer
                   objective:
                     description: Objective metrics used to compare evaluated scenarios
@@ -208,7 +212,7 @@ spec:
                     type: integer
                   type:
                     description: "The scenario selection strategy type: exhaustive,\
-                      \ randomSampling or bayesianOptimization"
+                      \ randomSampling or knnAdaptive"
                     type: string
                 type: object
               workload:

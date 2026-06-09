@@ -39,6 +39,54 @@ experiments/
 # End of https://www.toptal.com/developers/gitignore/api/macos
 
 # Local/dev-only files
+LOCAL_RUN.md
 LOCAL_RUN
+LOCAL_RUN.*
+*.local
+*.local.*
 kind-local-config
+kind-local-config*
 test-results/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+*.p12
+*.jks
+secrets/
+credentials/
+kubeconfig*
+.kube/
+
+# Kubernetes/local cluster state
+*.kubeconfig
+*.context
+.local-cluster/
+tmp/
+
+# Experiment outputs / benchmark artifacts
+results/
+reports/
+logs/
+*.log
+*.csv
+*.jsonl
+
+# Java/Maven build artifacts
+target/
+.mvn/timing.properties
+dependency-reduced-pom.xml
+
+# IDE/editor local state
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.iml
+
+# OS noise
+Thumbs.db

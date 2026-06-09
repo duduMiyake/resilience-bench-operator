@@ -6,13 +6,14 @@ public class ScenarioSelectionStrategySpec {
 
   public static final String EXHAUSTIVE = "exhaustive";
   public static final String RANDOM_SAMPLING = "randomSampling";
-  public static final String BAYESIAN_OPTIMIZATION = "bayesianOptimization";
+  public static final String KNN_ADAPTIVE = "knnAdaptive";
   public static final long DEFAULT_SEED = 42L;
   public static final double DEFAULT_SAMPLE_RATE = 0.5;
   public static final int DEFAULT_INITIAL_SAMPLES = 20;
-  public static final String EXPECTED_IMPROVEMENT = "expectedImprovement";
+  public static final int DEFAULT_NEIGHBORS = 3;
+  public static final double DEFAULT_EXPLORATION_WEIGHT = 0.1;
 
-  @JsonPropertyDescription("The scenario selection strategy type: exhaustive, randomSampling or bayesianOptimization")
+  @JsonPropertyDescription("The scenario selection strategy type: exhaustive, randomSampling or knnAdaptive")
   private String type;
 
   @JsonPropertyDescription("Fraction of scenarios to select. Valid range is (0, 1]")
@@ -24,17 +25,20 @@ public class ScenarioSelectionStrategySpec {
   @JsonPropertyDescription("Seed used by randomSampling for reproducible scenario selection")
   private Long seed;
 
-  @JsonPropertyDescription("Number of initial space-filling samples for bayesianOptimization")
+  @JsonPropertyDescription("Number of initial space-filling samples for adaptive strategies")
   private Integer initialSamples;
 
-  @JsonPropertyDescription("Maximum number of scenario evaluations for bayesianOptimization")
+  @JsonPropertyDescription("Maximum number of scenario evaluations for adaptive strategies")
   private Integer maxEvaluations;
-
-  @JsonPropertyDescription("Acquisition function used by bayesianOptimization. Currently supports expectedImprovement")
-  private String acquisitionFunction;
 
   @JsonPropertyDescription("Objective metrics used to compare evaluated scenarios")
   private ObjectiveSpec objective;
+
+  @JsonPropertyDescription("Number of evaluated nearest neighbors used by knnAdaptive")
+  private Integer neighbors;
+
+  @JsonPropertyDescription("Exploration bonus weight used by knnAdaptive")
+  private Double explorationWeight;
 
   public ScenarioSelectionStrategySpec() {
   }
@@ -48,12 +52,20 @@ public class ScenarioSelectionStrategySpec {
 
   public ScenarioSelectionStrategySpec(String type, Double sampleRate, Integer maxScenarios, Long seed,
                                        Integer initialSamples, Integer maxEvaluations,
-                                       String acquisitionFunction, ObjectiveSpec objective) {
+                                       ObjectiveSpec objective) {
     this(type, sampleRate, maxScenarios, seed);
     this.initialSamples = initialSamples;
     this.maxEvaluations = maxEvaluations;
-    this.acquisitionFunction = acquisitionFunction;
     this.objective = objective;
+  }
+
+  public ScenarioSelectionStrategySpec(String type, Double sampleRate, Integer maxScenarios, Long seed,
+                                       Integer initialSamples, Integer maxEvaluations,
+                                       ObjectiveSpec objective,
+                                       Integer neighbors, Double explorationWeight) {
+    this(type, sampleRate, maxScenarios, seed, initialSamples, maxEvaluations, objective);
+    this.neighbors = neighbors;
+    this.explorationWeight = explorationWeight;
   }
 
   public String getType() {
@@ -80,11 +92,15 @@ public class ScenarioSelectionStrategySpec {
     return maxEvaluations;
   }
 
-  public String getAcquisitionFunction() {
-    return acquisitionFunction;
-  }
-
   public ObjectiveSpec getObjective() {
     return objective;
+  }
+
+  public Integer getNeighbors() {
+    return neighbors;
+  }
+
+  public Double getExplorationWeight() {
+    return explorationWeight;
   }
 }

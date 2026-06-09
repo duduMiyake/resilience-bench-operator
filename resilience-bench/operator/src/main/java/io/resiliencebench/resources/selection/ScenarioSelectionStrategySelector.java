@@ -11,14 +11,14 @@ public class ScenarioSelectionStrategySelector {
 
   private final ExhaustiveScenarioSelectionStrategy exhaustiveScenarioSelectionStrategy;
   private final RandomSamplingScenarioSelectionStrategy randomSamplingScenarioSelectionStrategy;
-  private final BayesianOptimizationScenarioSelectionStrategy bayesianOptimizationScenarioSelectionStrategy;
+  private final KnnAdaptiveScenarioSelectionStrategy knnAdaptiveScenarioSelectionStrategy;
 
   public ScenarioSelectionStrategySelector(ExhaustiveScenarioSelectionStrategy exhaustiveScenarioSelectionStrategy,
                                            RandomSamplingScenarioSelectionStrategy randomSamplingScenarioSelectionStrategy,
-                                           BayesianOptimizationScenarioSelectionStrategy bayesianOptimizationScenarioSelectionStrategy) {
+                                           KnnAdaptiveScenarioSelectionStrategy knnAdaptiveScenarioSelectionStrategy) {
     this.exhaustiveScenarioSelectionStrategy = exhaustiveScenarioSelectionStrategy;
     this.randomSamplingScenarioSelectionStrategy = randomSamplingScenarioSelectionStrategy;
-    this.bayesianOptimizationScenarioSelectionStrategy = bayesianOptimizationScenarioSelectionStrategy;
+    this.knnAdaptiveScenarioSelectionStrategy = knnAdaptiveScenarioSelectionStrategy;
   }
 
   public ScenarioSelectionStrategy select(Benchmark benchmark) {
@@ -34,8 +34,8 @@ public class ScenarioSelectionStrategySelector {
       return randomSamplingScenarioSelectionStrategy;
     }
 
-    if (ScenarioSelectionStrategySpec.BAYESIAN_OPTIMIZATION.equalsIgnoreCase(strategy.getType())) {
-      return bayesianOptimizationScenarioSelectionStrategy;
+    if (ScenarioSelectionStrategySpec.KNN_ADAPTIVE.equalsIgnoreCase(strategy.getType())) {
+      return knnAdaptiveScenarioSelectionStrategy;
     }
 
     throw new IllegalArgumentException("Unknown scenario selection strategy type: " + strategy.getType());
@@ -46,8 +46,8 @@ public class ScenarioSelectionStrategySelector {
 
     var strategy = benchmark.getSpec().getStrategy();
     if (strategy != null
-            && ScenarioSelectionStrategySpec.BAYESIAN_OPTIMIZATION.equalsIgnoreCase(strategy.getType())) {
-      return Optional.of(bayesianOptimizationScenarioSelectionStrategy);
+            && ScenarioSelectionStrategySpec.KNN_ADAPTIVE.equalsIgnoreCase(strategy.getType())) {
+      return Optional.of(knnAdaptiveScenarioSelectionStrategy);
     }
     return Optional.empty();
   }
@@ -62,7 +62,7 @@ public class ScenarioSelectionStrategySelector {
     if (type != null && !type.isBlank()
             && !ScenarioSelectionStrategySpec.EXHAUSTIVE.equalsIgnoreCase(type)
             && !ScenarioSelectionStrategySpec.RANDOM_SAMPLING.equalsIgnoreCase(type)
-            && !ScenarioSelectionStrategySpec.BAYESIAN_OPTIMIZATION.equalsIgnoreCase(type)) {
+            && !ScenarioSelectionStrategySpec.KNN_ADAPTIVE.equalsIgnoreCase(type)) {
       throw new IllegalArgumentException("Unknown scenario selection strategy type: " + type);
     }
 
@@ -88,9 +88,12 @@ public class ScenarioSelectionStrategySelector {
       throw new IllegalArgumentException("strategy.initialSamples must be less than or equal to strategy.maxEvaluations");
     }
 
-    if (strategy.getAcquisitionFunction() != null
-            && !ScenarioSelectionStrategySpec.EXPECTED_IMPROVEMENT.equalsIgnoreCase(strategy.getAcquisitionFunction())) {
-      throw new IllegalArgumentException("strategy.acquisitionFunction must be expectedImprovement");
+    if (strategy.getNeighbors() != null && strategy.getNeighbors() <= 0) {
+      throw new IllegalArgumentException("strategy.neighbors must be greater than 0");
+    }
+
+    if (strategy.getExplorationWeight() != null && strategy.getExplorationWeight() < 0) {
+      throw new IllegalArgumentException("strategy.explorationWeight must be greater than or equal to 0");
     }
   }
 }

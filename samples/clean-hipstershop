@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Script de limpeza do ambiente Hipster Shop/ResilienceBench.
+#
+# Uso:
+#   ./samples/clean-hipstershop benchmark  # remove somente execucoes: jobs, queues, scenarios e benchmark
+#   ./samples/clean-hipstershop app        # remove o overlay Hipster Shop/operator, mantendo o cluster kind
+#   ./samples/clean-hipstershop cluster    # apaga o cluster kind inteiro e libera CPU/RAM dos containers
+#   ./samples/clean-hipstershop all        # remove app e apaga o cluster
+#   ./samples/clean-hipstershop status     # mostra o que ainda esta rodando
+#
+# Para liberar ainda mais recurso depois de apagar o cluster, rode no PowerShell do Windows:
+#   wsl --shutdown
+
+CLUSTER_NAME="${CLUSTER_NAME:-resiliencebench}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+cluster_exists() {
+  kind get clusters | grep -qx "${CLUSTER_NAME}"
+}
+
+use_context_if_exists() {
+  if cluster_exists; then
+    kubectl config use-context "kind-${CLUSTER_NAME}" >/dev/null
+  fi
+}
+
+clean_benchmark() {
+  use_context_if_exists
+  echo "Removendo execucoes do benchmark no namespace hipstershop..."
+  kubectl delete job --all -n hipstershop --ignore-not-found=true
+  kubectl delete queue --all -n hipstershop --ignore-not-found=true
+  kubectl delete scenario --all -n hipstershop --ignore-not-found=true
+  kubectl delete benchmark hipstershop -n hipstershop --ignore-not-found=true
+}
+
+clean_app() {
+  use_context_if_exists
+  echo "Removendo overlay Hipster Shop/operator..."
+  kubectl delete -k "${ROOT_DIR}/samples/overlays/hipstershop" --ignore-not-found=true
+}
+
+delete_cluster() {
+  if cluster_exists; then
+    echo "Apagando cluster kind '${CLUSTER_NAME}'..."
+    kind delete cluster --name "${CLUSTER_NAME}"
+  else
+    echo "Cluster kind '${CLUSTER_NAME}' nao existe."
+  fi
+}
+
+status() {
+  if ! cluster_exists; then
+    echo "Cluster kind '${CLUSTER_NAME}' nao existe."
+    return
+  fi
+
+  use_context_if_exists
+  echo
+  echo "Nodes:"
+  kubectl get nodes -o wide
+
+  echo
+  echo "Pods do namespace hipstershop:"
+  kubectl get pods -n hipstershop -o wide || true
+
+  echo
+  echo "Jobs/queues/scenarios/benchmarks:"
+  kubectl get job,queue,scenario,benchmark -n hipstershop || true
+}
+
+case "${1:-help}" in
+  benchmark)
+    clean_benchmark
+    status
+    ;;
+  app)
+    clean_app
+    status
+    ;;
+  cluster)
+    delete_cluster
+    ;;
+  all)
+    if cluster_exists; then
+      clean_app
+    fi
+    delete_cluster
+    ;;
+  status)
+    status
+    ;;
+  help|--help|-h)
+    sed -n '1,18p' "$0"
+    ;;
+  *)
+    echo "Comando desconhecido: $1"
+    echo "Use: $0 benchmark|app|cluster|all|status"
+    exit 1
+    ;;
+esac

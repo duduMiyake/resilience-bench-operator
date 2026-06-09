@@ -79,3 +79,49 @@ spec:
   scenarios:
     []
 ```
+
+## k-NN adaptive
+
+`knnAdaptive` starts with an initial space-filling sample, then selects one additional scenario at a time using the evaluated scenarios that are closest to each remaining candidate.
+
+Defaults:
+
+- `seed`: `42`
+- `initialSamples`: `20`, capped by the evaluation budget and by the full scenario space size
+- `maxEvaluations`: full scenario space size when neither `maxEvaluations` nor `maxScenarios` is provided
+- `neighbors`: `3`
+- `explorationWeight`: `0.1`
+- `objective`: `successRate - p95Latency` when no explicit objective is provided
+
+`neighbors` must be greater than `0`. `explorationWeight` must be greater than or equal to `0`.
+
+For each remaining candidate, `knnAdaptive` finds the `neighbors` evaluated scenarios with the smallest configuration distance, predicts the candidate score using a distance-weighted average of their real scores, and adds an exploration bonus:
+
+```text
+selectionScore = predictedScore + explorationWeight * uncertainty
+```
+
+`uncertainty` is the distance to the closest evaluated scenario. A higher `explorationWeight` favors candidates in less explored regions; `0` makes the strategy choose only by predicted score.
+
+```yaml
+apiVersion: resiliencebench.io/v1beta1
+kind: Benchmark
+metadata:
+  name: onlineboutique
+spec:
+  workload: fixed-iterations-loadtest
+  strategy:
+    type: knnAdaptive
+    seed: 42
+    initialSamples: 20
+    maxEvaluations: 100
+    neighbors: 3
+    explorationWeight: 0.1
+    objective:
+      maximize:
+        - successRate
+      minimize:
+        - p95Latency
+  scenarios:
+    []
+```
