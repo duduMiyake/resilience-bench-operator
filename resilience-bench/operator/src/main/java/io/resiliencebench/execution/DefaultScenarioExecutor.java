@@ -14,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import static io.resiliencebench.support.Annotations.*;
 import static java.util.Objects.nonNull;
 
@@ -57,10 +59,19 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
     jobsClient.inNamespace(job.getMetadata().getNamespace()).withName(job.getMetadata().getName()).delete();
     jobsClient.resource(job).create();
     logger.info("Job created: {}", job.getMetadata().getName());
-    jobsClient.resource(job).watch(new Watcher<>() {
+    jobsClient.resource(job).watch(createJobCompletionWatcher(onCompletion));
+  }
+
+  Watcher<Job> createJobCompletionWatcher(Runnable onCompletion) {
+    var completionHandled = new AtomicBoolean(false);
+    return new Watcher<>() {
       @Override
       public void eventReceived(Action action, Job resource) {
         if (action.equals(Action.MODIFIED) && nonNull(resource.getStatus().getCompletionTime())) {
+          if (!completionHandled.compareAndSet(false, true)) {
+            logger.debug("Ignoring duplicate completion event for job: {}", resource.getMetadata().getName());
+            return;
+          }
           logger.info("Finished job: {}", resource.getMetadata().getName());
           var namespace = resource.getMetadata().getNamespace();
           var scenarioName = resource.getMetadata().getAnnotations().get(SCENARIO);
@@ -77,7 +88,7 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
       public void onClose(WatcherException cause) {
         logger.info("Job watcher closed", cause); // TODO pesquisar sobre o evento de close
       }
-    });
+    };
   }
 
 
