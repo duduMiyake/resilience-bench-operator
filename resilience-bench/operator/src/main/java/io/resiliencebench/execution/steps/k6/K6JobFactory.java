@@ -88,6 +88,9 @@ public class K6JobFactory {
             .withCommand("k6", "run", "/scripts/k6.js")
             .withImagePullPolicy("IfNotPresent")
             .withPorts(new ContainerPortBuilder().withContainerPort(6565).build())
+            .withNewSecurityContext()
+            .withRunAsUser(0L)
+            .endSecurityContext()
             .withVolumeMounts(
                     new VolumeMount("/scripts", "None", "script-volume", false, null, null),
                     new VolumeMount("/results", "HostToContainer", "test-results", false, null, null)
