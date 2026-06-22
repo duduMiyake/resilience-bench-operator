@@ -74,13 +74,3 @@ patches:
       kind: Deployment
       name: shippingservice
     path: app/patches/common.yaml
-  - target:
-      version: v1
-      kind: Deployment
-      name: frontend
-    path: app/patches/app-node-selector.yaml
-  - target:
-      version: v1
-      kind: Deployment
-      name: redis-cart
-    path: app/patches/app-node-selector.yaml

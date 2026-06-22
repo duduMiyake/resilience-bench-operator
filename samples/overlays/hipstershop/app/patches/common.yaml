@@ -15,10 +15,6 @@
   path: /spec/template/spec/terminationGracePeriodSeconds
   value: 60
 
-- op: add
-  path: /spec/template/spec/nodeSelector
-  value:
-    workload-role: app
 
 # server container
 
