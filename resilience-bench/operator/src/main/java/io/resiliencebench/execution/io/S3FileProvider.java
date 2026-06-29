@@ -26,9 +26,13 @@ public class S3FileProvider implements FileProvider {
 
   private final AmazonS3 s3Client;
   private final String bucketName;
+  private final String keyPrefix;
 
-  public S3FileProvider(@Value("${AWS_BUCKET_NAME:none}") String bucketName, AmazonS3 s3Client) {
+  public S3FileProvider(@Value("${AWS_BUCKET_NAME:none}") String bucketName,
+                        @Value("${AWS_S3_PREFIX:}") String keyPrefix,
+                        AmazonS3 s3Client) {
     this.bucketName = bucketName; // TODO abstrair para CRD Benchmark
+    this.keyPrefix = normalizeKeyPrefix(keyPrefix);
     this.s3Client = s3Client;
   }
 
@@ -39,7 +43,7 @@ public class S3FileProvider implements FileProvider {
       InputStream inputStream = new ByteArrayInputStream(contentBytes);
       var metadata = new ObjectMetadata();
       metadata.setContentLength(contentBytes.length);
-      var putObjectRequest = new PutObjectRequest(bucketName, resultFile, inputStream, metadata);
+      var putObjectRequest = new PutObjectRequest(bucketName, objectKey(resultFile), inputStream, metadata);
       s3Client.putObject(putObjectRequest);
       logger.info("File {} uploaded to bucket {}.", resultFile, bucketName);
     } catch (AmazonServiceException e) {
@@ -52,7 +56,7 @@ public class S3FileProvider implements FileProvider {
   @Override
   public Optional<String> getFileAsString(String resultFile) {
     try {
-      var content = s3Client.getObjectAsString(bucketName, resultFile);
+      var content = s3Client.getObjectAsString(bucketName, objectKey(resultFile));
       if (content == null) {
         logger.warn("File {} not found in bucket {}.", resultFile, bucketName);
         return empty();
@@ -66,5 +70,30 @@ public class S3FileProvider implements FileProvider {
       logger.warn("Error reading file {}. {}", resultFile, e.getMessage());
       return empty();
     }
+  }
+
+  private String objectKey(String resultFile) {
+    var key = resultFile;
+    while (key.startsWith("/")) {
+      key = key.substring(1);
+    }
+    if (keyPrefix.isBlank()) {
+      return key;
+    }
+    return keyPrefix + "/" + key;
+  }
+
+  private static String normalizeKeyPrefix(String keyPrefix) {
+    if (keyPrefix == null || keyPrefix.isBlank()) {
+      return "";
+    }
+    var normalizedPrefix = keyPrefix.trim();
+    while (normalizedPrefix.startsWith("/")) {
+      normalizedPrefix = normalizedPrefix.substring(1);
+    }
+    while (normalizedPrefix.endsWith("/")) {
+      normalizedPrefix = normalizedPrefix.substring(0, normalizedPrefix.length() - 1);
+    }
+    return normalizedPrefix;
   }
 }

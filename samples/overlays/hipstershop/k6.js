@@ -2,6 +2,16 @@ import { parseHTML } from 'k6/html';
 import { check, group } from 'k6';
 import http from 'k6/http';
 import { Counter, Trend } from 'k6/metrics';
+import {
+  AWSConfig,
+  S3Client,
+} from 'https://jslib.k6.io/aws/0.12.3/s3.js';
+
+const s3 = new S3Client(new AWSConfig({
+  region: __ENV.AWS_REGION || 'us-east-1',
+  accessKeyId: __ENV.AWS_ACCESS_KEY_ID,
+  secretAccessKey: __ENV.AWS_SECRET_ACCESS_KEY,
+}));
 
 const vus = parseInt(__ENV.VIRTUAL_USERS || '10', 10);
 const iterations = parseInt(__ENV.K6_ITERATIONS || '10', 10);
@@ -27,6 +37,8 @@ const creditCard = {
 };
 
 const outputPath = __ENV.OUTPUT_PATH;
+const bucketName = __ENV.BUCKET_NAME || __ENV.AWS_BUCKET_NAME;
+const s3Prefix = __ENV.AWS_S3_PREFIX || '';
 const HOST = __ENV.HOST || 'frontend';
 
 const httpDurationIndex = new Trend('custom_index_http_req_duration');
@@ -220,7 +232,7 @@ function checkout() {
   }
 }
 
-export function handleSummary(data) {
+export async function handleSummary(data) {
   const metrics = {};
 
   for (const [metricName, metricData] of Object.entries(data.metrics)) {
@@ -252,7 +264,20 @@ export function handleSummary(data) {
   metrics.iterations = data.metrics.iterations.values.count;
 
   console.log(`checkout_success_rate=${metrics.checkout_success_rate}`);
-  return {
-    [outputPath]: JSON.stringify(metrics, null, 2),
-  };
+  await s3.putObject(bucketName, objectKey(outputPath), JSON.stringify(metrics, null, 2));
+}
+
+function objectKey(path) {
+  let key = path;
+  while (key.startsWith('/')) {
+    key = key.substring(1);
+  }
+  let prefix = s3Prefix.trim();
+  while (prefix.startsWith('/')) {
+    prefix = prefix.substring(1);
+  }
+  while (prefix.endsWith('/')) {
+    prefix = prefix.substring(0, prefix.length - 1);
+  }
+  return prefix ? `${prefix}/${key}` : key;
 }

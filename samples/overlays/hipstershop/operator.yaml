@@ -62,7 +62,23 @@ spec:
         imagePullPolicy: Always
         env:
         - name: STORAGE_TYPE
-          value: "local"
+          value: "cloud"
+        - name: AWS_BUCKET_NAME
+          value: "resiliencebench-results-eduardo-2026-704229157352-us-east-1-an"
+        - name: AWS_REGION
+          value: "us-east-1"
+        - name: AWS_S3_PREFIX
+          value: "hipstershop"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
 
         # ports:
         # - containerPort: 8080

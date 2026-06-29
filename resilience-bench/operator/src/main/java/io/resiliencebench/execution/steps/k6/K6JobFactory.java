@@ -19,6 +19,8 @@ import static io.resiliencebench.support.Annotations.*;
 @Service
 public class K6JobFactory {
 
+  private static final String DEFAULT_AWS_CREDENTIALS_SECRET = "aws-credentials";
+
   public K6JobFactory() {
   }
 
@@ -62,7 +64,39 @@ public class K6JobFactory {
     for (var item : workload.getSpec().getOptions()) {
       envs.add(new EnvVar(item.getName(), item.getValue().asText(), null));
     }
+    addCloudStorageEnvVars(envs);
     return envs;
+  }
+
+  private void addCloudStorageEnvVars(List<EnvVar> envs) {
+    if (!isCloudStorageEnabled()) {
+      return;
+    }
+    addEnvIfPresent(envs, "AWS_REGION", System.getenv("AWS_REGION"));
+    addEnvIfPresent(envs, "BUCKET_NAME", System.getenv("AWS_BUCKET_NAME"));
+    addEnvIfPresent(envs, "AWS_BUCKET_NAME", System.getenv("AWS_BUCKET_NAME"));
+    addEnvIfPresent(envs, "AWS_S3_PREFIX", System.getenv("AWS_S3_PREFIX"));
+
+    var secretName = System.getenv().getOrDefault("AWS_CREDENTIALS_SECRET", DEFAULT_AWS_CREDENTIALS_SECRET);
+    envs.add(new EnvVar("AWS_ACCESS_KEY_ID", null,
+            new EnvVarSourceBuilder()
+                    .withNewSecretKeyRef("access-key-id", secretName, false)
+                    .build()));
+    envs.add(new EnvVar("AWS_SECRET_ACCESS_KEY", null,
+            new EnvVarSourceBuilder()
+                    .withNewSecretKeyRef("secret-access-key", secretName, false)
+                    .build()));
+  }
+
+  private boolean isCloudStorageEnabled() {
+    var storageType = System.getenv("STORAGE_TYPE");
+    return storageType != null && "CLOUD".equalsIgnoreCase(storageType);
+  }
+
+  private void addEnvIfPresent(List<EnvVar> envs, String name, String value) {
+    if (value != null && !value.isBlank()) {
+      envs.add(new EnvVar(name, value, null));
+    }
   }
 
   private Map<String, String> resolveNodeSelector() {
