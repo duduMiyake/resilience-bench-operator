@@ -14,7 +14,6 @@ configMapGenerator:
 resources:
   - namespace.yaml 
   - benchmark.yaml
-  - test-results-pvc.yaml
   - operator.yaml
   - app/adservice.yaml
   - app/cartservice.yaml

@@ -37,7 +37,7 @@ public class K6JobFactory {
             .withRestartPolicy("Never")
             .withNodeSelector(resolveNodeSelector())
             .withContainers(createK6Container(scenario.getSpec().getWorkload(), workload, executionQueueItem))
-            .withVolumes(createResultsVolume(), createScriptVolume(workload))
+            .withVolumes(createVolumes(workload))
             .endSpec()
             .endTemplate()
             .withBackoffLimit(4)
@@ -125,13 +125,28 @@ public class K6JobFactory {
             .withNewSecurityContext()
             .withRunAsUser(0L)
             .endSecurityContext()
-            .withVolumeMounts(
-                    new VolumeMount("/scripts", "None", "script-volume", false, null, null),
-                    new VolumeMount("/results", "HostToContainer", "test-results", false, null, null)
-            )
+            .withVolumeMounts(createVolumeMounts())
             .withEnv(resolveEnvVars(workload, scenarioWorkload, executionQueueItem));
 
     return container.build();
+  }
+
+  public List<Volume> createVolumes(Workload workload) {
+    var volumes = new ArrayList<Volume>();
+    volumes.add(createScriptVolume(workload));
+    if (!isCloudStorageEnabled()) {
+      volumes.add(createResultsVolume());
+    }
+    return volumes;
+  }
+
+  public List<VolumeMount> createVolumeMounts() {
+    var volumeMounts = new ArrayList<VolumeMount>();
+    volumeMounts.add(new VolumeMount("/scripts", "None", "script-volume", false, null, null));
+    if (!isCloudStorageEnabled()) {
+      volumeMounts.add(new VolumeMount("/results", "HostToContainer", "test-results", false, null, null));
+    }
+    return volumeMounts;
   }
 
   public Volume createResultsVolume() {

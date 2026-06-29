@@ -82,10 +82,6 @@ spec:
 
         # ports:
         # - containerPort: 8080
-        volumeMounts:
-        - mountPath: /results
-          mountPropagation: HostToContainer
-          name: test-results
         # resources:
         #   requests:
         #     memory: "512Mi"
@@ -93,10 +89,6 @@ spec:
         #   limits:
         #     memory: "1024Mi"
         #     cpu: "2000m"
-      volumes:
-      - name: test-results
-        persistentVolumeClaim:
-          claimName: test-results
         # readinessProbe:
         #   httpGet:
         #     path: /healthz
