@@ -3,71 +3,77 @@ set -euo pipefail
 
 # Script de limpeza do ambiente Hipster Shop/ResilienceBench.
 #
+# Funciona tanto no ambiente local com kind quanto em um cluster ja acessivel
+# via kubectl, como a VM Vagrant controlplane do servidor.
+#
 # Uso:
 #   ./samples/clean-hipstershop benchmark  # remove somente execucoes: jobs, queues, scenarios e benchmark
-#   ./samples/clean-hipstershop app        # remove o overlay Hipster Shop/operator, mantendo o cluster kind
-#   ./samples/clean-hipstershop cluster    # apaga o cluster kind inteiro e libera CPU/RAM dos containers
-#   ./samples/clean-hipstershop all        # remove app e apaga o cluster
+#   ./samples/clean-hipstershop app        # remove o overlay Hipster Shop/operator
+#   ./samples/clean-hipstershop cluster    # apaga o cluster kind local, se existir
+#   ./samples/clean-hipstershop all        # remove app e apaga o cluster kind, se existir
 #   ./samples/clean-hipstershop status     # mostra o que ainda esta rodando
-#
-# Para liberar ainda mais recurso depois de apagar o cluster, rode no PowerShell do Windows:
-#   wsl --shutdown
 
 CLUSTER_NAME="${CLUSTER_NAME:-resiliencebench}"
+NAMESPACE="${NAMESPACE:-hipstershop}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-cluster_exists() {
-  kind get clusters | grep -qx "${CLUSTER_NAME}"
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+kind_cluster_exists() {
+  command_exists kind && kind get clusters 2>/dev/null | grep -qx "${CLUSTER_NAME}"
 }
 
 use_context_if_exists() {
-  if cluster_exists; then
+  if kind_cluster_exists; then
     kubectl config use-context "kind-${CLUSTER_NAME}" >/dev/null
   fi
 }
 
-clean_benchmark() {
+ensure_kubectl_access() {
   use_context_if_exists
-  echo "Removendo execucoes do benchmark no namespace hipstershop..."
-  kubectl delete job --all -n hipstershop --ignore-not-found=true
-  kubectl delete queue --all -n hipstershop --ignore-not-found=true
-  kubectl delete scenario --all -n hipstershop --ignore-not-found=true
-  kubectl delete benchmark hipstershop -n hipstershop --ignore-not-found=true
+  kubectl get nodes >/dev/null
+}
+
+clean_benchmark() {
+  ensure_kubectl_access
+  echo "Removendo execucoes do benchmark no namespace ${NAMESPACE}..."
+  kubectl delete job --all -n "${NAMESPACE}" --ignore-not-found=true
+  kubectl delete queue --all -n "${NAMESPACE}" --ignore-not-found=true
+  kubectl delete scenario --all -n "${NAMESPACE}" --ignore-not-found=true
+  kubectl delete benchmark hipstershop -n "${NAMESPACE}" --ignore-not-found=true
 }
 
 clean_app() {
-  use_context_if_exists
+  ensure_kubectl_access
   echo "Removendo overlay Hipster Shop/operator..."
   kubectl delete -k "${ROOT_DIR}/samples/overlays/hipstershop" --ignore-not-found=true
 }
 
 delete_cluster() {
-  if cluster_exists; then
+  if kind_cluster_exists; then
     echo "Apagando cluster kind '${CLUSTER_NAME}'..."
     kind delete cluster --name "${CLUSTER_NAME}"
   else
-    echo "Cluster kind '${CLUSTER_NAME}' nao existe."
+    echo "Cluster kind '${CLUSTER_NAME}' nao existe ou kind nao esta instalado. Nada a apagar."
   fi
 }
 
 status() {
-  if ! cluster_exists; then
-    echo "Cluster kind '${CLUSTER_NAME}' nao existe."
-    return
-  fi
+  ensure_kubectl_access
 
-  use_context_if_exists
   echo
   echo "Nodes:"
   kubectl get nodes -o wide
 
   echo
-  echo "Pods do namespace hipstershop:"
-  kubectl get pods -n hipstershop -o wide || true
+  echo "Pods do namespace ${NAMESPACE}:"
+  kubectl get pods -n "${NAMESPACE}" -o wide || true
 
   echo
   echo "Jobs/queues/scenarios/benchmarks:"
-  kubectl get job,queue,scenario,benchmark -n hipstershop || true
+  kubectl get job,queue,scenario,benchmark -n "${NAMESPACE}" || true
 }
 
 case "${1:-help}" in
@@ -83,16 +89,14 @@ case "${1:-help}" in
     delete_cluster
     ;;
   all)
-    if cluster_exists; then
-      clean_app
-    fi
+    clean_app || true
     delete_cluster
     ;;
   status)
     status
     ;;
   help|--help|-h)
-    sed -n '1,18p' "$0"
+    sed -n '1,15p' "$0"
     ;;
   *)
     echo "Comando desconhecido: $1"

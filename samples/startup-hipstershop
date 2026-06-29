@@ -1,32 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Script de apoio para rodar o Hipster Shop localmente com kind.
+# Script de apoio para rodar o Hipster Shop.
 #
-# Layout esperado do cluster:
-# - control-plane: controle do Kubernetes
-# - worker com label workload-role=app: microservicos do Hipster Shop
-# - worker com label workload-role=infra: operator, Jobs k6 e volume de resultados
-#
-# Antes de usar, garanta que o WSL tenha memoria suficiente. Exemplo de .wslconfig:
-# [wsl2]
-# memory=12GB
-# processors=12
-# swap=4GB
+# Modos comuns:
+# - local com kind: use `start` para criar cluster, buildar imagem e aplicar tudo.
+# - servidor/Vagrant/kubeadm: entre na VM controlplane, garanta que kubectl funciona
+#   e use `deploy`, `restart-benchmark` ou `status`.
 #
 # Uso:
-#   ./samples/startup-hipstershop start              # cria cluster, builda imagem, aplica CRDs e deploya tudo
-#   ./samples/startup-hipstershop deploy             # aplica CRDs e overlay, sem recriar cluster nem rebuildar imagem
+#   ./samples/startup-hipstershop start              # cria cluster kind, builda imagem, aplica CRDs e deploya tudo
+#   ./samples/startup-hipstershop deploy             # aplica CRDs e overlay no cluster kubectl atual
 #   ./samples/startup-hipstershop restart-benchmark  # limpa somente execucoes e reaplica o Benchmark
 #   ./samples/startup-hipstershop status             # mostra nodes, pods e filas
 
 CLUSTER_NAME="${CLUSTER_NAME:-resiliencebench}"
+NAMESPACE="${NAMESPACE:-hipstershop}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+kind_cluster_exists() {
+  command_exists kind && kind get clusters 2>/dev/null | grep -qx "${CLUSTER_NAME}"
+}
+
+use_context_if_exists() {
+  if kind_cluster_exists; then
+    kubectl config use-context "kind-${CLUSTER_NAME}" >/dev/null
+  fi
+}
+
+ensure_kubectl_access() {
+  use_context_if_exists
+  kubectl get nodes >/dev/null
+}
+
 ensure_kind_cluster() {
+  if ! command_exists kind; then
+    echo "kind nao esta instalado. Use 'deploy' em um cluster kubectl ja configurado."
+    exit 1
+  fi
+
   mkdir -p "${ROOT_DIR}/test-results"
 
-  if kind get clusters | grep -qx "${CLUSTER_NAME}"; then
+  if kind_cluster_exists; then
     echo "Cluster kind '${CLUSTER_NAME}' ja existe."
   else
     echo "Criando cluster kind '${CLUSTER_NAME}' com worker app e worker infra..."
@@ -48,41 +67,47 @@ build_and_load_operator() {
 }
 
 deploy_hipstershop() {
+  ensure_kubectl_access
+
   echo "Aplicando CRDs..."
   kubectl apply -f "${ROOT_DIR}/crd"
 
   echo "Aplicando overlay Hipster Shop..."
   kubectl apply -k "${ROOT_DIR}/samples/overlays/hipstershop"
 
-  echo "Aguardando Deployments do namespace hipstershop..."
-  kubectl get deployment -n hipstershop -o name | while read -r deployment; do
-    kubectl rollout status "${deployment}" -n hipstershop --timeout=5m
+  echo "Aguardando Deployments do namespace ${NAMESPACE}..."
+  kubectl get deployment -n "${NAMESPACE}" -o name | while read -r deployment; do
+    kubectl rollout status "${deployment}" -n "${NAMESPACE}" --timeout=5m
   done
 }
 
 restart_benchmark() {
+  ensure_kubectl_access
+
   echo "Limpando somente recursos de execucao do benchmark..."
-  kubectl delete benchmark hipstershop -n hipstershop --ignore-not-found=true
-  kubectl delete scenario --all -n hipstershop --ignore-not-found=true
-  kubectl delete queue --all -n hipstershop --ignore-not-found=true
-  kubectl delete job --all -n hipstershop --ignore-not-found=true
+  kubectl delete benchmark hipstershop -n "${NAMESPACE}" --ignore-not-found=true
+  kubectl delete scenario --all -n "${NAMESPACE}" --ignore-not-found=true
+  kubectl delete queue --all -n "${NAMESPACE}" --ignore-not-found=true
+  kubectl delete job --all -n "${NAMESPACE}" --ignore-not-found=true
 
   echo "Reaplicando Benchmark e recursos declarativos do overlay..."
   kubectl apply -k "${ROOT_DIR}/samples/overlays/hipstershop"
 }
 
 status() {
+  ensure_kubectl_access
+
   echo
   echo "Nodes e labels:"
   kubectl get nodes --show-labels
 
   echo
   echo "Pods do Hipster Shop por node:"
-  kubectl get pods -n hipstershop -o wide
+  kubectl get pods -n "${NAMESPACE}" -o wide
 
   echo
   echo "Benchmarks, queues e jobs:"
-  kubectl get benchmark,queue,scenario,job -n hipstershop
+  kubectl get benchmark,queue,scenario,job -n "${NAMESPACE}" || true
 }
 
 case "${1:-help}" in
@@ -93,21 +118,18 @@ case "${1:-help}" in
     status
     ;;
   deploy)
-    ensure_kind_cluster
     deploy_hipstershop
     status
     ;;
   restart-benchmark)
-    ensure_kind_cluster
     restart_benchmark
     status
     ;;
   status)
-    ensure_kind_cluster
     status
     ;;
   help|--help|-h)
-    sed -n '1,28p' "$0"
+    sed -n '1,18p' "$0"
     ;;
   *)
     echo "Comando desconhecido: $1"
