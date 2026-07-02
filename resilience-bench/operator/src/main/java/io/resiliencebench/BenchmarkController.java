@@ -49,6 +49,13 @@ public class BenchmarkController implements Reconciler<Benchmark> {
   // Considering only creation and update events. if something changes in benchmark, we need to re-run the scenarios
   @Override
   public UpdateControl<Benchmark> reconcile(Benchmark benchmark, Context<Benchmark> context) {
+    var existingQueue = queueRepository.find(benchmark.getMetadata().getNamespace(), benchmark.getMetadata().getName());
+    if (existingQueue.isPresent()) {
+      logger.info("Queue already exists for benchmark {}. Reusing existing queue.", benchmark.getMetadata().getName());
+      queueExecutor.execute(existingQueue.get());
+      return UpdateControl.noUpdate();
+    }
+
     var workload = workloadRepository.find(benchmark.getMetadata().getNamespace(), benchmark.getSpec().getWorkload());
     if (workload.isEmpty()) {
       logger.error("Workload not found: {}", benchmark.getSpec().getWorkload());
