@@ -230,14 +230,18 @@ Cada connector varia:
 Cada connector gera:
 
 ```text
-4 * 3 * 1 * 3 = 36 configuracoes
+4 * 3 * 1 * 3 = 36 configuracoes de retry
 ```
 
-Como existem dois connectors combinados:
+Quando `includeBaseline: true` esta habilitado no connector, o `ScenarioFactory` adiciona mais uma opcao sem configuracao de resiliencia para esse connector. Essa opcao representa o baseline daquele caminho, por exemplo `frontendservice -> checkoutservice` sem retry.
+
+Com dois connectors e baseline habilitado nos dois:
 
 ```text
-36 * 36 = 1296 cenarios
+(36 + 1) * (36 + 1) = 1369 cenarios
 ```
+
+Assim, o espaco de busca inclui tanto combinacoes com retry quanto casos em que um ou ambos os connectors ficam sem retry. Isso permite que estrategias como `exhaustive` e `knnAdaptive` comparem configuracoes de retry contra o baseline dentro da mesma rodada.
 
 Com `initialSamples: 20` e `maxEvaluations: 100`, a ferramenta executa primeiro 20 cenarios espalhados pelo espaco e depois escolhe mais 80, um por vez, usando os resultados ja coletados.
 
@@ -275,4 +279,5 @@ spec:
 `randomSampling` escolhe uma amostra fixa e reprodutivel.
 
 `knnAdaptive` escolhe uma amostra inicial espalhada e depois prioriza cenarios parecidos com os melhores resultados ja observados, com um bonus configuravel para exploracao.
+
 

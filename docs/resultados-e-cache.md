@@ -126,12 +126,34 @@ Esse arquivo deve servir como base para uma visualizacao futura em grafo, onde c
 
 ## Importacao de resultados antigos
 
-Existe um service de backfill (`ScenarioResultCacheBackfill`) para importar um arquivo agregado antigo para o cache estavel.
+O operador pode rodar um backfill de cache na inicializacao quando estas variaveis de ambiente estiverem configuradas:
 
-Ele le um `*-results.json`, calcula ou reaproveita `scenarioHash` de cada item em `results` e grava cada item no cache em:
-
-```text
-/results/cache/<benchmarkName>/<scenarioHash>.json
+```yaml
+- name: RESULT_CACHE_BACKFILL_ENABLED
+  value: "true"
+- name: RESULT_CACHE_BACKFILL_BENCHMARK
+  value: "hipstershop"
+- name: RESULT_CACHE_BACKFILL_FILE
+  value: "/exhaustive/results/2026-07-02-18-01-49-results.json"
+- name: RESULT_CACHE_BACKFILL_CACHE_PREFIX
+  value: "/results/cache"
+- name: RESULT_CACHE_BACKFILL_RUNS_PREFIX
+  value: "/results/runs"
 ```
 
+Com `AWS_S3_PREFIX=hipstershop`, o arquivo acima e lido em:
+
+```text
+hipstershop/exhaustive/results/2026-07-02-18-01-49-results.json
+```
+
+Cada item do array `results` e gravado no cache em:
+
+```text
+hipstershop/results/cache/hipstershop/<scenarioHash>.json
+```
+
+Depois que o log indicar que o backfill terminou, remova ou desative `RESULT_CACHE_BACKFILL_ENABLED` para o operador nao tentar importar o mesmo arquivo a cada reinicio.
+
 Resultados antigos precisam conter metadados suficientes (`workload_name`, `workload_users`, `fault` quando existir e `connectors`) para gerar uma chave equivalente aos cenarios novos.
+

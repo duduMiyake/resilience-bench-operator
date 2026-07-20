@@ -101,6 +101,10 @@ spec:
                                   type: integer
                                 type: array
                             type: object
+                          includeBaseline:
+                            description: Include an additional connector option without
+                              resilience configuration for baseline comparison
+                            type: boolean
                           name:
                             description: Name of the connector
                             type: string

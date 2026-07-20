@@ -142,6 +142,11 @@ spec:
   workload: k6-loadtest
   strategy:
     type: exhaustive
+  resultCache:
+    enabled: true
+    mode: readWrite
+    cachePrefix: /results/cache
+    runsPrefix: /results/runs
   scenarios:
     - name: retry-checkout
       fault:
@@ -152,6 +157,7 @@ spec:
           - checkoutservice
       connectors:
         - name: retry-frontend-checkout
+          includeBaseline: true
           source:
             name: frontendservice
             envs:
@@ -167,6 +173,7 @@ spec:
             name: checkoutservice
 
         - name: retry-checkout-payment
+          includeBaseline: true
           source:
             name: checkoutservice
             envs:
@@ -180,3 +187,4 @@ spec:
                 value: ["1", "1.5", "2.0"]
           destination:
             name: paymentservice
+
