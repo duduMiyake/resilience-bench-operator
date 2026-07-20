@@ -11,6 +11,8 @@ public class ConnectorTemplate {
   private ServiceTemplate source;
   @JsonPropertyDescription("The destination service of the connector. This is the service that will be called by the source service.")
   private ServiceTemplate destination;
+  @JsonPropertyDescription("Include an additional connector option without resilience configuration for baseline comparison")
+  private Boolean includeBaseline;
   @JsonPropertyDescription("Specification of the failure type to be injected in the destination service.")
   @Nullable
   private BenchmarkFaultTemplate fault;
@@ -22,11 +24,17 @@ public class ConnectorTemplate {
   }
 
   public ConnectorTemplate(String name, ServiceTemplate source, ServiceTemplate destination, BenchmarkFaultTemplate fault, PatternTemplate pattern) {
+    this(name, source, destination, fault, pattern, null);
+  }
+
+  public ConnectorTemplate(String name, ServiceTemplate source, ServiceTemplate destination, BenchmarkFaultTemplate fault,
+                           PatternTemplate pattern, Boolean includeBaseline) {
     this.name = name;
     this.source = source;
     this.destination = destination;
     this.fault = fault;
     this.pattern = pattern;
+    this.includeBaseline = includeBaseline;
   }
 
   public String getName() {
@@ -39,6 +47,14 @@ public class ConnectorTemplate {
 
   public ServiceTemplate getDestination() {
     return destination;
+  }
+
+  public Boolean getIncludeBaseline() {
+    return includeBaseline;
+  }
+
+  public boolean isIncludeBaseline() {
+    return Boolean.TRUE.equals(includeBaseline);
   }
 
   public BenchmarkFaultTemplate getFault() {

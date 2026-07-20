@@ -96,6 +96,14 @@ public final class ScenarioFactory {
       }
     }
 
+    if (connectorTemplate.isIncludeBaseline()) {
+      expandedConnectors.add(new Connector.Builder()
+              .name(connectorTemplate.getName())
+              .source(new Service(connectorTemplate.getSource().getName()))
+              .destination(new Service(connectorTemplate.getDestination().getName()))
+              .build());
+    }
+
     return expandedConnectors;
   }
 
@@ -178,3 +186,4 @@ public final class ScenarioFactory {
             .build();
   }
 }
+

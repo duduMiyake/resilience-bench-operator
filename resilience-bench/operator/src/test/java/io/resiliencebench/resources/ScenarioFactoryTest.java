@@ -186,6 +186,64 @@ public class ScenarioFactoryTest {
     }
   }
 
+  @Test
+  public void should_include_baseline_connector_option_when_enabled() {
+    var connector = new ConnectorTemplate(
+            "connector-1",
+            new ServiceTemplate("source"),
+            new ServiceTemplate("destination"),
+            null,
+            new PatternTemplate(new IstioPatternTemplate(
+                    new NameValueProperties(
+                            new NameValueProperties.Attribute("maxAttempts", of(1, 2)),
+                            new NameValueProperties.Attribute("backoffLimit", of(100, 200))
+                    ), null, null)),
+            true);
+    var spec = new BenchmarkSpec("workload",
+            of(new ScenarioTemplate("scenario-1", of(connector)))
+    );
+    var benchmark = new Benchmark();
+    benchmark.setSpec(spec);
+
+    var scenarios = ScenarioFactory.create(benchmark, createWorkload(of(10)));
+
+    assertEquals(5, scenarios.size());
+    assertTrue(scenarios.stream().anyMatch(scenario -> scenario.getSpec().getConnectors().get(0).getIstio() == null));
+  }
+
+  @Test
+  public void should_generate_1369_hipster_shop_scenarios_when_two_retry_connectors_include_baseline() {
+    var retry = new NameValueProperties(
+            new NameValueProperties.Attribute("GRPC_MAX_ATTEMPTS", of("2", "3", "4", "5")),
+            new NameValueProperties.Attribute("GRPC_INITIAL_BACKOFF", of("0.5s", "1s", "1.5s")),
+            new NameValueProperties.Attribute("GRPC_MAX_BACKOFF", of("15s")),
+            new NameValueProperties.Attribute("GRPC_BACKOFF_MULTIPLIER", of("1", "1.5", "2.0"))
+    );
+    var first = new ConnectorTemplate(
+            "retry-frontend-checkout",
+            new ServiceTemplate("frontendservice", retry),
+            new ServiceTemplate("checkoutservice"),
+            null,
+            null,
+            true);
+    var second = new ConnectorTemplate(
+            "retry-checkout-payment",
+            new ServiceTemplate("checkoutservice", retry),
+            new ServiceTemplate("paymentservice"),
+            null,
+            null,
+            true);
+    var spec = new BenchmarkSpec("workload",
+            of(new ScenarioTemplate("retry-checkout", of(first, second),
+                    new ScenarioFaultTemplate("envoy", of(50), of("paymentservice", "checkoutservice"))))
+    );
+    var benchmark = new Benchmark();
+    benchmark.setSpec(spec);
+
+    var scenarios = ScenarioFactory.create(benchmark, createWorkload(of(300)));
+
+    assertEquals(1369, scenarios.size());
+  }
 //  @Test
 //  void loadyaml() {
 //    KubernetesClient client = new DefaultKubernetesClient();
