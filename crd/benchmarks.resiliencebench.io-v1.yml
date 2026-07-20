@@ -24,6 +24,22 @@ spec:
         properties:
           spec:
             properties:
+              resultCache:
+                description: Scenario result cache/replay configuration
+                properties:
+                  cachePrefix:
+                    description: Stable result cache prefix. Defaults to /results/cache
+                    type: string
+                  enabled:
+                    description: Enables scenario result cache/replay for this benchmark
+                    type: boolean
+                  mode:
+                    description: Cache mode. Currently only readWrite is supported
+                    type: string
+                  runsPrefix:
+                    description: Execution run artifacts prefix. Defaults to /results/runs
+                    type: string
+                type: object
               scenarios:
                 description: The set of scenarios templates to be processed and then
                   generated as scenarios

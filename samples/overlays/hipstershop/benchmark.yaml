@@ -141,9 +141,7 @@ metadata:
 spec:
   workload: k6-loadtest
   strategy:
-    type: randomSampling
-    seed: 42
-    maxScenarios: 100
+    type: exhaustive
   scenarios:
     - name: retry-checkout
       fault:

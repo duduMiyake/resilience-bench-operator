@@ -68,7 +68,7 @@ spec:
         - name: AWS_REGION
           value: "us-east-1"
         - name: AWS_S3_PREFIX
-          value: "hipstershop"
+          value: "hipstershop/exhaustive"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:

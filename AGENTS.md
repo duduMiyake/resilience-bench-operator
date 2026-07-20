@@ -56,6 +56,14 @@ Padrao atual:
 - estrategias adaptativas implementam `AdaptiveScenarioSelectionStrategy`;
 - `ScenarioSelectionStrategySelector` escolhe a estrategia com base em `Benchmark.spec.strategy.type`.
 
+Ideia central da geracao de cenarios:
+
+- o contexto experimental formado por carga e taxa de falha deve ser tratado como fixo durante a escolha;
+- conectores representam um conjunto fixo de experimentos/contextos a serem avaliados;
+- as heuristicas nao devem procurar novos contextos de carga, taxa de falha ou conectores;
+- o papel principal das heuristicas e escolher quais configuracoes de resiliencia devem ser testadas dentro desses contextos fixos;
+- cada `Scenario` deve ser entendido como uma configuracao concreta de resiliencia aplicada a um contexto experimental ja definido.
+
 Ao adicionar uma nova estrategia:
 
 1. crie uma nova classe em `resources/selection`;
@@ -86,6 +94,8 @@ O `knnAdaptive` atual usa:
 - score real calculado a partir das metricas;
 - score previsto por media ponderada;
 - bonus de exploracao baseado na distancia ate o avaliado mais proximo.
+
+Para heuristicas adaptativas, preserve a interpretacao do espaco de busca: a carga, a taxa de falha e os conectores definem contextos fixos de experimento. A heuristica deve aprender a partir dos resultados observados para priorizar novas configuracoes de resiliencia nesses mesmos contextos, e nao redefinir quais contextos existem.
 
 Ao mexer nessa area:
 

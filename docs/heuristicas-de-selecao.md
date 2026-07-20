@@ -241,6 +241,33 @@ Como existem dois connectors combinados:
 
 Com `initialSamples: 20` e `maxEvaluations: 100`, a ferramenta executa primeiro 20 cenarios espalhados pelo espaco e depois escolhe mais 80, um por vez, usando os resultados ja coletados.
 
+## Cache/replay e trace
+
+As estrategias continuam escolhendo cenarios da mesma forma, mesmo quando `spec.resultCache` esta habilitado. O cache entra apenas depois da escolha:
+
+1. a estrategia escolhe o cenario;
+2. o executor procura o resultado no cache estavel por `scenarioHash`;
+3. em caso de cache hit, o resultado e agregado na rodada atual sem executar k6/fault injection;
+4. em caso de cache miss, o cenario e executado normalmente e o resultado passa a popular o cache.
+
+Isso preserva a avaliacao honesta das heuristicas: elas nao consultam resultados de cenarios ainda nao escolhidos.
+
+Com cache habilitado, a rodada tambem registra um `trace.json` no diretorio da run. Esse trace guarda a ordem dos cenarios escolhidos, o hash do cenario, a origem do resultado (`cacheHit` ou `executed`) e o score calculado a partir do resultado. Ele deve ser usado futuramente para visualizacoes em grafo do caminho percorrido pela heuristica.
+
+Exemplo de configuracao:
+
+```yaml
+spec:
+  strategy:
+    type: knnAdaptive
+    initialSamples: 20
+    maxEvaluations: 100
+  resultCache:
+    enabled: true
+    mode: readWrite
+    cachePrefix: /results/cache
+    runsPrefix: /results/runs
+```
 ## Resumo
 
 `exhaustive` executa tudo.
@@ -248,3 +275,4 @@ Com `initialSamples: 20` e `maxEvaluations: 100`, a ferramenta executa primeiro 
 `randomSampling` escolhe uma amostra fixa e reprodutivel.
 
 `knnAdaptive` escolhe uma amostra inicial espalhada e depois prioriza cenarios parecidos com os melhores resultados ja observados, com um bonus configuravel para exploracao.
+

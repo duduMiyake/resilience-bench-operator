@@ -15,7 +15,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-final class ScenarioSelectionSupport {
+public final class ScenarioSelectionSupport {
 
   private ScenarioSelectionSupport() {
     throw new IllegalStateException("Utility class");
@@ -66,7 +66,7 @@ final class ScenarioSelectionSupport {
     return selected;
   }
 
-  static double objectiveScore(EvaluatedScenario evaluatedScenario, Benchmark benchmark) {
+  public static double objectiveScore(EvaluatedScenario evaluatedScenario, Benchmark benchmark) {
     var objective = benchmark.getSpec().getStrategy().getObjective();
     if (objective == null
             || ((objective.getMaximize() == null || objective.getMaximize().isEmpty())
@@ -99,7 +99,7 @@ final class ScenarioSelectionSupport {
             .orElse(Double.MAX_VALUE);
   }
 
-  static double distance(Map<String, Double> first, Map<String, Double> second) {
+  public static double distance(Map<String, Double> first, Map<String, Double> second) {
     Set<String> keys = new java.util.HashSet<>();
     keys.addAll(first.keySet());
     keys.addAll(second.keySet());
@@ -112,7 +112,7 @@ final class ScenarioSelectionSupport {
     return Math.sqrt(sum);
   }
 
-  static Map<String, Map<String, Double>> encode(List<Scenario> scenarios) {
+  public static Map<String, Map<String, Double>> encode(List<Scenario> scenarios) {
     Map<String, Map<String, Double>> rawVectors = new LinkedHashMap<>();
     for (Scenario scenario : scenarios) {
       rawVectors.put(scenario.getMetadata().getName(), rawFeatures(scenario));
@@ -222,3 +222,4 @@ final class ScenarioSelectionSupport {
     }
   }
 }
+

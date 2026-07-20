@@ -2,6 +2,7 @@ package io.resiliencebench.resources.selection;
 
 import io.resiliencebench.resources.benchmark.Benchmark;
 import io.resiliencebench.resources.benchmark.BenchmarkSpec;
+import io.resiliencebench.resources.benchmark.ResultCacheSpec;
 import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import org.junit.jupiter.api.Test;
 
@@ -125,6 +126,17 @@ class ScenarioSelectionStrategySelectorTest {
     var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
 
     assertEquals("strategy.explorationWeight must be greater than or equal to 0", exception.getMessage());
+  }
+
+  @Test
+  void should_fail_for_invalid_result_cache_mode() {
+    var benchmark = benchmark(new ScenarioSelectionStrategySpec("knnAdaptive", null, null, null));
+    benchmark.setSpec(new BenchmarkSpec("workload", benchmark.getSpec().getStrategy(),
+            new ResultCacheSpec(true, "readOnly", "/results/cache", "/results/runs"), of()));
+
+    var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
+
+    assertEquals("resultCache.mode must be readWrite", exception.getMessage());
   }
 
   private Benchmark benchmark(ScenarioSelectionStrategySpec strategySpec) {

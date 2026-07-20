@@ -1,6 +1,7 @@
 package io.resiliencebench.resources.selection;
 
 import io.resiliencebench.resources.benchmark.Benchmark;
+import io.resiliencebench.resources.benchmark.ResultCacheSpec;
 import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import org.springframework.stereotype.Component;
 
@@ -53,6 +54,7 @@ public class ScenarioSelectionStrategySelector {
   }
 
   public void validate(Benchmark benchmark) {
+    validateResultCache(benchmark);
     var strategy = benchmark.getSpec().getStrategy();
     if (strategy == null) {
       return;
@@ -94,6 +96,16 @@ public class ScenarioSelectionStrategySelector {
 
     if (strategy.getExplorationWeight() != null && strategy.getExplorationWeight() < 0) {
       throw new IllegalArgumentException("strategy.explorationWeight must be greater than or equal to 0");
+    }
+  }
+
+  private static void validateResultCache(Benchmark benchmark) {
+    var resultCache = benchmark.getSpec().getResultCache();
+    if (resultCache == null || !resultCache.isEnabled()) {
+      return;
+    }
+    if (!ResultCacheSpec.READ_WRITE.equalsIgnoreCase(resultCache.resolvedMode())) {
+      throw new IllegalArgumentException("resultCache.mode must be readWrite");
     }
   }
 }

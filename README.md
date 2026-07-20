@@ -1,17 +1,27 @@
 # ResilienceBench-Operator
 
+ResilienceBench-Operator is a Kubernetes-native tool designed to automate resilience experiments in microservice applications. It enables engineers and researchers to define and execute fault injection scenarios directly on services running in Kubernetes clusters.
 
-ResilienceBench-Operator ia a Kubernetes-native tool designed to automate resilience experiments in microservice applications. It enables engineers and researchers to define and execute fault injection scenarios directly on services running in Kubernetes clusters.
+The tool builds on the original [ResilienceBench](https://github.com/ppgia-unifor/resilience-bench), expanding it to real-world deployments through a declarative, CRD-based approach. It orchestrates experiments that test patterns such as Retry and Circuit Breaker under realistic load and fault conditions.
 
-The tool builds on the original [ResilienceBench]((https://github.com/ppgia-unifor/resilience-bench)), expanding its capabilities to real-world deployments through a declarative, CRD-based approach. It simplifies the orchestration of experiments that test patterns like Retry and Circuit Breaker under realistic conditions.
+## Documentation map
 
-### Architecture
+Start here when changing or running the project:
+
+- [AGENTS.md](AGENTS.md): implementation rules and project conventions for agents and LLMs.
+- [LOCAL_RUN.md](LOCAL_RUN.md): local kind setup, build and deployment commands.
+- [docs/README.md](docs/README.md): documentation index.
+- [docs/heuristicas-de-selecao.md](docs/heuristicas-de-selecao.md): scenario selection strategies and adaptive heuristic behavior.
+- [docs/resultados-e-cache.md](docs/resultados-e-cache.md): result files, S3 storage and planned cache/replay behavior.
+- [POSSIBILIDADES_HEURISTICAS.md](POSSIBILIDADES_HEURISTICAS.md): backlog of possible heuristic and evaluation improvements.
+
+## Architecture
 
 ![Architecture representation](./resiliencebench-operator-latest.svg)
 
-### Usage scenario
+## Usage scenario
 
-Consider a microservices-based application like the diagram bellow, where the connectors represent communication between the services. Each service is subject to several failure possibilities and workload variations, and for each of these situations, there is an appropriate configuration of resilience patterns. In this context, the tool's purpose is to automate the creation of test scenarios, exhaustively evaluating all possible scenarios under different load levels and failure conditions with minimal configuration.
+Consider a microservices-based application like the diagram below, where connectors represent communication between services. Each service may be evaluated under different failure possibilities, workload variations and resilience-pattern configurations. In this context, the tool automates scenario generation and execution from a Kubernetes `Benchmark` custom resource.
 
 ```mermaid
 flowchart TD
@@ -31,8 +41,7 @@ Before you begin development, ensure you have the following prerequisites instal
 - **kubectl**: The Kubernetes command-line tool, used to interact with your Kubernetes cluster.
 - **A Kubernetes Cluster**: You need an accessible Kubernetes cluster where the operator will be deployed.
 
-
-### Project setup for coding
+## Project setup for coding
 
 1. Clone the repository and build it:
 
@@ -42,24 +51,25 @@ Before you begin development, ensure you have the following prerequisites instal
    mvn clean install
    ```
 
-2. Open it in your preferred code editor and have fun!
+2. Open it in your preferred code editor.
 
-### Project setup for running
+## Project setup for running
 
-1. Clone the repository to your local machine
+1. Clone the repository to your local machine:
 
 ```bash
 git clone https://github.com/ppgia-unifor/resilience-bench-operator.git
 ```
 
-2. Install the CRD, the operator and one of the samples:
-
+2. Install the CRDs, the operator and one of the samples:
 
 ```bash
 kubectl apply -f ./crd
 kubectl apply -k ./samples/overlays/hipstershop
 ```
 
+For a full local kind setup, see [LOCAL_RUN.md](LOCAL_RUN.md).
+
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](license.md) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

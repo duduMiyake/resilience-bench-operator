@@ -1,12 +1,14 @@
-
 package io.resiliencebench.execution;
 
 import static java.lang.String.format;
 
 import io.resiliencebench.execution.io.FileProvider;
 import io.resiliencebench.execution.io.FileProviderFactory;
+import io.resiliencebench.execution.resultcache.HeuristicTraceWriter;
+import io.resiliencebench.execution.resultcache.ScenarioResultCache;
 import io.resiliencebench.resources.ExecutionQueueFactory;
 import io.resiliencebench.resources.benchmark.Benchmark;
+import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.queue.ExecutionQueueItem;
 import io.resiliencebench.resources.queue.ExecutionQueueStatus;
 import io.resiliencebench.resources.selection.EvaluatedScenario;
@@ -22,9 +24,12 @@ import io.resiliencebench.support.CustomResourceRepository;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static io.resiliencebench.support.Annotations.OWNED_BY;
 import static io.resiliencebench.resources.queue.ExecutionQueueItem.Status.*;
@@ -44,6 +49,8 @@ public class DefaultQueueExecutor implements QueueExecutor {
   private final ScenarioExecutor scenarioExecutor;
   private final ScenarioSelectionStrategySelector scenarioSelectionStrategySelector;
   private final FileProvider fileProvider;
+  private final ScenarioResultCache scenarioResultCache;
+  private final HeuristicTraceWriter heuristicTraceWriter;
 
   public DefaultQueueExecutor(
           CustomResourceRepository<Scenario> scenarioRepository,
@@ -52,7 +59,9 @@ public class DefaultQueueExecutor implements QueueExecutor {
           CustomResourceRepository<Workload> workloadRepository,
           ScenarioExecutor scenarioExecutor,
           ScenarioSelectionStrategySelector scenarioSelectionStrategySelector,
-          FileProviderFactory fileProviderFactory) {
+          FileProviderFactory fileProviderFactory,
+          ScenarioResultCache scenarioResultCache,
+          HeuristicTraceWriter heuristicTraceWriter) {
     this.scenarioRepository = scenarioRepository;
     this.executionRepository = executionRepository;
     this.benchmarkRepository = benchmarkRepository;
@@ -60,6 +69,8 @@ public class DefaultQueueExecutor implements QueueExecutor {
     this.scenarioExecutor = scenarioExecutor;
     this.scenarioSelectionStrategySelector = scenarioSelectionStrategySelector;
     this.fileProvider = fileProviderFactory.create();
+    this.scenarioResultCache = scenarioResultCache;
+    this.heuristicTraceWriter = heuristicTraceWriter;
   }
 
   @Override
@@ -85,12 +96,51 @@ public class DefaultQueueExecutor implements QueueExecutor {
     var scenarioName = item.getScenario();
     var namespace = executionQueue.getMetadata().getNamespace();
     var scenario = scenarioRepository.find(namespace, scenarioName);
-    if (scenario.isPresent()) {
-      logger.info("Running scenario: {}", scenarioName);
-      scenarioExecutor.execute(scenario.get(), executionQueue, () -> execute(executionQueue));
-    } else {
+    if (scenario.isEmpty()) {
       throw new RuntimeException(format("Scenario not found: %s.%s", namespace, scenarioName));
     }
+
+    var benchmark = benchmarkRepository.find(namespace, executionQueue.getSpec().getBenchmark());
+    if (benchmark.isPresent() && tryReplayCachedResult(item, executionQueue, scenario.get(), benchmark.get())) {
+      execute(executionQueue);
+      return;
+    }
+
+    logger.info("Running scenario: {}", scenarioName);
+    scenarioExecutor.execute(scenario.get(), executionQueue, () -> execute(executionQueue));
+  }
+
+  private boolean tryReplayCachedResult(ExecutionQueueItem item, ExecutionQueue executionQueue,
+                                        Scenario scenario, Benchmark benchmark) {
+    if (!scenarioResultCache.isReadWriteEnabled(benchmark)) {
+      return false;
+    }
+    var cachedResult = scenarioResultCache.get(benchmark, scenario);
+    if (cachedResult.isEmpty()) {
+      return false;
+    }
+
+    logger.info("Replaying cached result for scenario: {}", scenario.getMetadata().getName());
+    var replayedResult = scenarioResultCache.enrichResult(cachedResult.get(), benchmark, scenario, ScenarioResultCache.CACHE_HIT);
+    scenarioResultCache.writeItemResult(executionQueue, scenario, replayedResult);
+    heuristicTraceWriter.appendStep(benchmark, executionQueue, scenario,
+            phase(executionQueue, benchmark, scenario.getMetadata().getName()),
+            ScenarioResultCache.CACHE_HIT, replayedResult);
+    scenarioResultCache.appendToRun(executionQueue, replayedResult);
+    finishItem(executionQueue, item);
+    return true;
+  }
+
+  private void finishItem(ExecutionQueue executionQueue, ExecutionQueueItem item) {
+    var latestQueue = executionRepository.get(executionQueue.getMetadata().getNamespace(), executionQueue.getMetadata().getName());
+    var latestItem = latestQueue.getItem(item.getScenario());
+    var now = LocalDateTime.now(ZoneOffset.UTC).toString();
+    latestItem.setStartedAt(now);
+    latestItem.setStatus(FINISHED);
+    latestItem.setFinishedAt(now);
+    latestQueue.setStatus(createStatus(latestQueue));
+    var updatedQueue = executionRepository.update(latestQueue);
+    executionRepository.updateStatus(updatedQueue);
   }
 
   private Optional<ExecutionQueue> appendNextAdaptiveScenario(ExecutionQueue queue) {
@@ -170,4 +220,29 @@ public class DefaultQueueExecutor implements QueueExecutor {
             statusCounts.getOrDefault(FINISHED, 0L)
     );
   }
+
+  private static String phase(ExecutionQueue executionQueue, Benchmark benchmark, String scenarioName) {
+    var strategy = benchmark.getSpec().getStrategy();
+    var type = strategy == null || strategy.getType() == null ? ScenarioSelectionStrategySpec.EXHAUSTIVE : strategy.getType();
+    if (ScenarioSelectionStrategySpec.EXHAUSTIVE.equalsIgnoreCase(type)) {
+      return "exhaustive";
+    }
+    if (ScenarioSelectionStrategySpec.RANDOM_SAMPLING.equalsIgnoreCase(type)) {
+      return "randomSampling";
+    }
+    if (ScenarioSelectionStrategySpec.KNN_ADAPTIVE.equalsIgnoreCase(type)) {
+      var index = IntStream.range(0, executionQueue.getSpec().getItems().size())
+              .filter(i -> scenarioName.equals(executionQueue.getSpec().getItems().get(i).getScenario()))
+              .findFirst()
+              .orElse(executionQueue.getSpec().getItems().size());
+      var initialSamples = strategy.getInitialSamples() == null
+              ? ScenarioSelectionStrategySpec.DEFAULT_INITIAL_SAMPLES
+              : strategy.getInitialSamples();
+      return index < initialSamples ? "initialSample" : "adaptiveSelection";
+    }
+    return "execution";
+  }
 }
+
+
+

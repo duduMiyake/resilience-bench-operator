@@ -46,6 +46,7 @@ class BenchmarkSpecTest {
             """, Benchmark.class);
 
     assertNull(benchmark.getSpec().getStrategy());
+    assertNull(benchmark.getSpec().getResultCache());
   }
 
   @Test
@@ -74,5 +75,31 @@ class BenchmarkSpecTest {
     assertEquals(100, strategy.getMaxEvaluations());
     assertEquals(3, strategy.getNeighbors());
     assertEquals(0.1, strategy.getExplorationWeight());
+  }
+
+  @Test
+  void should_load_result_cache_from_yaml() {
+    var benchmark = Serialization.unmarshal("""
+            apiVersion: resiliencebench.io/v1beta1
+            kind: Benchmark
+            metadata:
+              name: sample
+            spec:
+              workload: fixed-iterations-loadtest
+              resultCache:
+                enabled: true
+                mode: readWrite
+                cachePrefix: /results/cache
+                runsPrefix: /results/runs
+              scenarios: []
+            """, Benchmark.class);
+
+    var resultCache = benchmark.getSpec().getResultCache();
+
+    assertNotNull(resultCache);
+    assertTrue(resultCache.isEnabled());
+    assertEquals("readWrite", resultCache.getMode());
+    assertEquals("/results/cache", resultCache.resolvedCachePrefix());
+    assertEquals("/results/runs", resultCache.resolvedRunsPrefix());
   }
 }
