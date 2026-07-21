@@ -195,15 +195,20 @@ spec:
                     description: Exploration bonus weight used by knnAdaptive
                     type: number
                   initialSamples:
-                    description: Number of initial space-filling samples for adaptive
-                      strategies
+                    description: Number of initial space-filling configuration samples
+                      for adaptive strategies
+                    type: integer
+                  maxConfigurations:
+                    description: Maximum number of resilience configurations to select
                     type: integer
                   maxEvaluations:
-                    description: Maximum number of scenario evaluations for adaptive
-                      strategies
+                    description: Maximum number of configuration evaluations for adaptive
+                      strategies. Deprecated for configuration-based selection; use
+                      maxConfigurations instead
                     type: integer
                   maxScenarios:
-                    description: Maximum number of scenarios to select
+                    description: Maximum number of scenarios to select. Deprecated
+                      for configuration-based selection; use maxConfigurations instead
                     type: integer
                   neighbors:
                     description: Number of evaluated nearest neighbors used by knnAdaptive
@@ -223,8 +228,8 @@ spec:
                         type: array
                     type: object
                   sampleRate:
-                    description: "Fraction of scenarios to select. Valid range is\
-                      \ (0, 1]"
+                    description: "Fraction of configurations to select. Valid range\
+                      \ is (0, 1]"
                     type: number
                   seed:
                     description: Seed used by randomSampling for reproducible scenario

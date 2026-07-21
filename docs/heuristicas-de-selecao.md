@@ -10,10 +10,14 @@ O fluxo de selecao e execucao funciona assim:
 
 1. O `BenchmarkController` recebe um `Benchmark`.
 2. O `ScenarioFactory` expande todas as combinacoes possiveis declaradas no benchmark.
-3. O `ScenarioSelectionStrategySelector` escolhe a estrategia definida em `spec.strategy.type`.
-4. A estrategia seleciona os cenarios iniciais que entram na `Queue`.
-5. O `DefaultQueueExecutor` executa os itens da fila.
-6. Se a estrategia for adaptativa, como `knnAdaptive`, novos cenarios podem ser anexados a fila depois que resultados anteriores ja foram coletados.
+3. Os cenarios sao agrupados por `ResilienceConfigurationKey`, que representa apenas a configuracao de resiliencia.
+4. O `ScenarioSelectionStrategySelector` escolhe a estrategia definida em `spec.strategy.type`.
+5. A estrategia seleciona configuracoes de resiliencia.
+6. Cada configuracao selecionada e expandida para todos os cenarios concretos de carga x falha associados.
+7. O `DefaultQueueExecutor` executa os itens da fila, ainda como `Scenario`.
+8. Se a estrategia for adaptativa, como `knnAdaptive`, novas configuracoes podem ser anexadas a fila depois que todos os cenarios da configuracao anterior terminarem e forem agregados.
+
+`Scenario` continua sendo a unidade de execucao. A unidade de decisao das heuristicas passa a ser a configuracao de resiliencia. Isso impede que uma heuristica escolha ou descarte apenas uma combinacao especifica de carga ou taxa de falha.
 
 As estrategias implementadas hoje sao:
 
@@ -35,19 +39,21 @@ Use quando:
 
 ## Random sampling
 
-`randomSampling` gera todos os cenarios possiveis, embaralha a lista com uma seed e escolhe apenas uma parte.
+`randomSampling` gera todos os cenarios possiveis, agrupa por configuracao de resiliencia, embaralha as configuracoes com uma seed e escolhe apenas uma parte.
 
 Na implementacao, o calculo e:
 
 ```text
-sampleSize = ceil(totalScenarios * sampleRate)
+sampleSize = ceil(totalConfigurations * sampleRate)
 ```
 
-Depois, se `maxScenarios` estiver definido, ele limita o resultado:
+Depois, se `maxConfigurations` estiver definido, ele limita o resultado:
 
 ```text
-sampleSize = min(sampleSize, maxScenarios)
+sampleSize = min(sampleSize, maxConfigurations)
 ```
+
+`maxScenarios` ainda funciona como fallback temporario para YAMLs antigos, mas a semantica recomendada para heuristicas e usar `maxConfigurations`.
 
 Defaults:
 
@@ -74,14 +80,15 @@ O fluxo e:
 
 Parametros:
 
+- `maxConfigurations`: quantidade maxima de configuracoes avaliadas. Se ausente, `maxEvaluations` ou `maxScenarios` sao usados como fallback temporario.
 - `neighbors`: quantidade de vizinhos avaliados usados na previsao. Default: `3`.
 - `explorationWeight`: peso do bonus para regioes pouco exploradas. Default: `0.1`.
 
 ### Como o k-NN calcula distancia
 
-No `knnAdaptive`, os vizinhos sao sempre cenarios ja avaliados. Para saber quais sao os mais proximos, a ferramenta compara os parametros do candidato com os parametros dos cenarios que ja rodaram.
+No `knnAdaptive`, os vizinhos sao sempre configuracoes ja avaliadas. Para saber quais sao as mais proximas, a ferramenta compara os parametros da configuracao candidata com os parametros das configuracoes que ja foram avaliadas por completo.
 
-Primeiro, cada cenario vira um vetor numerico com campos como:
+Primeiro, cada configuracao vira um vetor numerico. Carga e taxa de falha nao entram nesse vetor. Exemplos de campos:
 
 ```text
 workload.users
@@ -91,7 +98,7 @@ connector.retry-frontend-checkout.source.env.GRPC_INITIAL_BACKOFF
 connector.retry-checkout-payment.source.env.GRPC_BACKOFF_MULTIPLIER
 ```
 
-Depois, cada parametro e normalizado entre `0` e `1` dentro do espaco total de cenarios. Isso evita que um parametro com numero maior domine a comparacao so por causa da escala.
+Depois, cada parametro e normalizado entre `0` e `1` dentro do espaco total de configuracoes. Isso evita que um parametro com numero maior domine a comparacao so por causa da escala.
 
 Exemplo:
 
@@ -125,7 +132,7 @@ distancia = sqrt((0.00 - 1.00)^2 + (0.50 - 0.50)^2)
 distancia = 1.00
 ```
 
-Quanto menor a distancia, mais parecido o cenario avaliado e com o candidato. A implementacao atual nao define pesos diferentes por parametro: todos os parametros normalizados entram com o mesmo peso.
+Quanto menor a distancia, mais parecida a configuracao avaliada e com a candidata. A implementacao atual nao define pesos diferentes por parametro: todos os parametros normalizados entram com o mesmo peso.
 
 ### Como o k-NN calcula o score
 
@@ -193,7 +200,7 @@ score_previsto = 0.72
 
 Como o vizinho A e o mais parecido, ele influencia mais a previsao.
 
-A formula usada para escolher o proximo cenario e:
+A formula usada para escolher a proxima configuracao e:
 
 ```text
 score_de_escolha = score_previsto + explorationWeight * incerteza
@@ -203,12 +210,12 @@ Onde:
 
 ```text
 score_previsto = media ponderada dos scores reais dos k vizinhos mais proximos
-incerteza = distancia ate o cenario avaliado mais proximo
+incerteza = distancia ate a configuracao avaliada mais proxima
 ```
 
 Se `explorationWeight` for `0`, a estrategia escolhe apenas pelo score previsto. Valores maiores fazem a estrategia dar mais chance para candidatos que estao longe do que ja foi testado.
 
-Exemplo com `neighbors: 3`: depois de executar 20 cenarios iniciais, a ferramenta compara cada candidato restante com esses 20 resultados, pega os 3 mais parecidos, calcula o score previsto e guarda. Depois de fazer isso para todos os candidatos, executa o candidato com maior score de escolha. Quando esse teste termina, ele entra na lista de avaliados e o processo se repete com 21 resultados.
+Exemplo com `neighbors: 3`: depois de avaliar 20 configuracoes iniciais, a ferramenta compara cada candidato restante com esses 20 resultados, pega os 3 mais parecidos, calcula o score previsto e guarda. Depois de fazer isso para todas as configuracoes candidatas, escolhe a configuracao com maior score de escolha. O executor adiciona todos os cenarios carga x falha dessa configuracao. So quando todos terminam, o resultado agregado da configuracao entra na lista de avaliados e o processo escolhe a proxima configuracao.
 
 ## Exemplo com o benchmark Hipster Shop
 

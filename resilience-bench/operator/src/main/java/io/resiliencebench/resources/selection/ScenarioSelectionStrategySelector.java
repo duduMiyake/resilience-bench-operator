@@ -42,7 +42,7 @@ public class ScenarioSelectionStrategySelector {
     throw new IllegalArgumentException("Unknown scenario selection strategy type: " + strategy.getType());
   }
 
-  public Optional<AdaptiveScenarioSelectionStrategy> selectAdaptive(Benchmark benchmark) {
+  public Optional<AdaptiveConfigurationSelectionStrategy> selectAdaptive(Benchmark benchmark) {
     validate(benchmark);
 
     var strategy = benchmark.getSpec().getStrategy();
@@ -77,6 +77,10 @@ public class ScenarioSelectionStrategySelector {
       throw new IllegalArgumentException("strategy.maxScenarios must be greater than 0");
     }
 
+    if (strategy.getMaxConfigurations() != null && strategy.getMaxConfigurations() <= 0) {
+      throw new IllegalArgumentException("strategy.maxConfigurations must be greater than 0");
+    }
+
     if (strategy.getInitialSamples() != null && strategy.getInitialSamples() <= 0) {
       throw new IllegalArgumentException("strategy.initialSamples must be greater than 0");
     }
@@ -85,7 +89,13 @@ public class ScenarioSelectionStrategySelector {
       throw new IllegalArgumentException("strategy.maxEvaluations must be greater than 0");
     }
 
-    if (strategy.getInitialSamples() != null && strategy.getMaxEvaluations() != null
+    if (strategy.getInitialSamples() != null && strategy.getMaxConfigurations() != null
+            && strategy.getInitialSamples() > strategy.getMaxConfigurations()) {
+      throw new IllegalArgumentException("strategy.initialSamples must be less than or equal to strategy.maxConfigurations");
+    }
+
+    if (strategy.getInitialSamples() != null && strategy.getMaxConfigurations() == null
+            && strategy.getMaxEvaluations() != null
             && strategy.getInitialSamples() > strategy.getMaxEvaluations()) {
       throw new IllegalArgumentException("strategy.initialSamples must be less than or equal to strategy.maxEvaluations");
     }

@@ -3,8 +3,10 @@ package io.resiliencebench.resources.selection;
 import io.resiliencebench.resources.ScenarioFactory;
 import io.resiliencebench.resources.benchmark.Benchmark;
 import io.resiliencebench.resources.benchmark.BenchmarkSpec;
+import io.resiliencebench.resources.benchmark.ScenarioFaultTemplate;
 import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.benchmark.ScenarioTemplate;
+import io.resiliencebench.resources.selection.configuration.ScenarioConfigurationIndex;
 import org.junit.jupiter.api.Test;
 
 import static io.resiliencebench.resources.ScenarioFactoryTest.createConnector;
@@ -17,52 +19,72 @@ class RandomSamplingScenarioSelectionStrategyTest {
   private final RandomSamplingScenarioSelectionStrategy strategy = new RandomSamplingScenarioSelectionStrategy();
 
   @Test
-  void should_select_ceil_of_sample_rate() {
+  void should_select_ceil_of_sample_rate_as_configurations() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec("randomSampling", 0.5, null, 42L));
     var workload = createWorkload(of(10, 20, 30));
     var allScenarios = ScenarioFactory.create(benchmark, workload);
 
     var selectedScenarios = strategy.selectScenarios(allScenarios, benchmark, workload);
 
-    assertEquals(12, allScenarios.size());
-    assertEquals(6, selectedScenarios.size());
+    assertEquals(36, allScenarios.size());
+    assertEquals(18, selectedScenarios.size());
+    assertEquals(2, ScenarioConfigurationIndex.from(selectedScenarios).totalConfigurations());
   }
 
   @Test
-  void should_select_at_least_one_scenario_when_sample_rate_rounds_below_one() {
+  void should_select_at_least_one_complete_configuration_when_sample_rate_rounds_below_one() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec("randomSampling", 0.01, null, 42L));
-    var workload = createWorkload(of(10));
+    var workload = createWorkload(of(10, 20, 30));
     var allScenarios = ScenarioFactory.create(benchmark, workload);
 
     var selectedScenarios = strategy.selectScenarios(allScenarios, benchmark, workload);
 
-    assertEquals(1, selectedScenarios.size());
+    assertEquals(9, selectedScenarios.size());
+    assertEquals(1, ScenarioConfigurationIndex.from(selectedScenarios).totalConfigurations());
   }
 
   @Test
-  void should_limit_by_max_scenarios() {
+  void should_limit_by_max_configurations() {
+    var strategySpec = new ScenarioSelectionStrategySpec("randomSampling", null, null, 42L);
+    strategySpec.setMaxConfigurations(2);
+    var benchmark = benchmark(strategySpec);
+    var workload = createWorkload(of(10, 20, 30));
+    var allScenarios = ScenarioFactory.create(benchmark, workload);
+
+    var selectedScenarios = strategy.selectScenarios(allScenarios, benchmark, workload);
+
+    assertEquals(18, selectedScenarios.size());
+    assertEquals(2, ScenarioConfigurationIndex.from(selectedScenarios).totalConfigurations());
+  }
+
+  @Test
+  void should_use_max_scenarios_as_legacy_configuration_limit() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec("randomSampling", null, 3, 42L));
     var workload = createWorkload(of(10, 20, 30));
     var allScenarios = ScenarioFactory.create(benchmark, workload);
 
     var selectedScenarios = strategy.selectScenarios(allScenarios, benchmark, workload);
 
-    assertEquals(3, selectedScenarios.size());
+    assertEquals(27, selectedScenarios.size());
+    assertEquals(3, ScenarioConfigurationIndex.from(selectedScenarios).totalConfigurations());
   }
 
   @Test
-  void should_apply_sample_rate_before_max_scenarios() {
-    var benchmark = benchmark(new ScenarioSelectionStrategySpec("randomSampling", 0.5, 2, 42L));
+  void should_apply_sample_rate_before_max_configurations() {
+    var strategySpec = new ScenarioSelectionStrategySpec("randomSampling", 0.5, null, 42L);
+    strategySpec.setMaxConfigurations(1);
+    var benchmark = benchmark(strategySpec);
     var workload = createWorkload(of(10, 20, 30));
     var allScenarios = ScenarioFactory.create(benchmark, workload);
 
     var selectedScenarios = strategy.selectScenarios(allScenarios, benchmark, workload);
 
-    assertEquals(2, selectedScenarios.size());
+    assertEquals(9, selectedScenarios.size());
+    assertEquals(1, ScenarioConfigurationIndex.from(selectedScenarios).totalConfigurations());
   }
 
   @Test
-  void should_select_same_scenarios_for_same_seed() {
+  void should_select_same_configurations_for_same_seed() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec("randomSampling", 0.5, null, 42L));
     var workload = createWorkload(of(10, 20, 30));
     var allScenarios = ScenarioFactory.create(benchmark, workload);
@@ -74,7 +96,7 @@ class RandomSamplingScenarioSelectionStrategyTest {
   }
 
   @Test
-  void should_be_able_to_select_different_scenarios_for_different_seeds() {
+  void should_be_able_to_select_different_configurations_for_different_seeds() {
     var firstBenchmark = benchmark(new ScenarioSelectionStrategySpec("randomSampling", 0.5, null, 42L));
     var secondBenchmark = benchmark(new ScenarioSelectionStrategySpec("randomSampling", 0.5, null, 99L));
     var workload = createWorkload(of(10, 20, 30));
@@ -94,13 +116,15 @@ class RandomSamplingScenarioSelectionStrategyTest {
 
     var selectedScenarios = strategy.selectScenarios(allScenarios, benchmark, workload);
 
-    assertEquals(6, selectedScenarios.size());
+    assertEquals(18, selectedScenarios.size());
+    assertEquals(2, ScenarioConfigurationIndex.from(selectedScenarios).totalConfigurations());
   }
 
   private Benchmark benchmark(ScenarioSelectionStrategySpec strategySpec) {
     var benchmark = new Benchmark();
     benchmark.setSpec(new BenchmarkSpec("workload", strategySpec,
-            of(new ScenarioTemplate("scenario-1", of(createConnector("connector-1"))))));
+            of(new ScenarioTemplate("scenario-1", of(createConnector("connector-1")),
+                    new ScenarioFaultTemplate("envoy", of(25, 50, 75), of("destination"))))));
     return benchmark;
   }
 

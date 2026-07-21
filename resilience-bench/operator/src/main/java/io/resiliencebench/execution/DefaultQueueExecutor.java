@@ -11,8 +11,11 @@ import io.resiliencebench.resources.benchmark.Benchmark;
 import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.queue.ExecutionQueueItem;
 import io.resiliencebench.resources.queue.ExecutionQueueStatus;
+import io.resiliencebench.resources.selection.ConfigurationResultAggregator;
 import io.resiliencebench.resources.selection.EvaluatedScenario;
 import io.resiliencebench.resources.selection.ScenarioSelectionStrategySelector;
+import io.resiliencebench.resources.selection.configuration.ResilienceConfigurationKey;
+import io.resiliencebench.resources.selection.configuration.ScenarioConfigurationIndex;
 import io.resiliencebench.resources.workload.Workload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +31,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -51,6 +55,7 @@ public class DefaultQueueExecutor implements QueueExecutor {
   private final FileProvider fileProvider;
   private final ScenarioResultCache scenarioResultCache;
   private final HeuristicTraceWriter heuristicTraceWriter;
+  private final ConfigurationResultAggregator configurationResultAggregator;
 
   public DefaultQueueExecutor(
           CustomResourceRepository<Scenario> scenarioRepository,
@@ -61,7 +66,8 @@ public class DefaultQueueExecutor implements QueueExecutor {
           ScenarioSelectionStrategySelector scenarioSelectionStrategySelector,
           FileProviderFactory fileProviderFactory,
           ScenarioResultCache scenarioResultCache,
-          HeuristicTraceWriter heuristicTraceWriter) {
+          HeuristicTraceWriter heuristicTraceWriter,
+          ConfigurationResultAggregator configurationResultAggregator) {
     this.scenarioRepository = scenarioRepository;
     this.executionRepository = executionRepository;
     this.benchmarkRepository = benchmarkRepository;
@@ -71,6 +77,7 @@ public class DefaultQueueExecutor implements QueueExecutor {
     this.fileProvider = fileProviderFactory.create();
     this.scenarioResultCache = scenarioResultCache;
     this.heuristicTraceWriter = heuristicTraceWriter;
+    this.configurationResultAggregator = configurationResultAggregator;
   }
 
   @Override
@@ -82,7 +89,7 @@ public class DefaultQueueExecutor implements QueueExecutor {
 
     if (nextItem.isPresent() && nextItem.get().isPending()) {
       executeScenario(nextItem.get(), queueToExecute);
-    } else if (appendNextAdaptiveScenario(queueToExecute).isPresent()) {
+    } else if (appendNextAdaptiveConfiguration(queueToExecute).isPresent()) {
       execute(queueToExecute);
     } else {
       logger.info("No item available for queue: {}", queueToExecute.getMetadata().getName());
@@ -143,7 +150,10 @@ public class DefaultQueueExecutor implements QueueExecutor {
     executionRepository.updateStatus(updatedQueue);
   }
 
-  private Optional<ExecutionQueue> appendNextAdaptiveScenario(ExecutionQueue queue) {
+  private Optional<ExecutionQueue> appendNextAdaptiveConfiguration(ExecutionQueue queue) {
+    if (queue.getSpec().getItems().stream().anyMatch(ExecutionQueueItem::isRunning)) {
+      return Optional.empty();
+    }
     var namespace = queue.getMetadata().getNamespace();
     var benchmarkName = queue.getSpec().getBenchmark();
     var benchmark = benchmarkRepository.find(namespace, benchmarkName);
@@ -164,39 +174,57 @@ public class DefaultQueueExecutor implements QueueExecutor {
       return Optional.empty();
     }
 
-    var queuedScenarioNames = queue.getSpec().getItems().stream()
-            .map(ExecutionQueueItem::getScenario)
-            .collect(Collectors.toSet());
     var evaluatedScenarios = readEvaluatedScenarios(queue);
     var allScenarios = scenarioRepository.list(namespace).stream()
             .filter(scenario -> scenario.getMetadata().getAnnotations() != null)
             .filter(scenario -> benchmarkName.equals(scenario.getMetadata().getAnnotations().get(OWNED_BY)))
             .toList();
+    var configurationIndex = ScenarioConfigurationIndex.from(allScenarios);
+    var alreadyQueuedConfigurations = queuedConfigurations(queue, configurationIndex);
+    var evaluatedConfigurations = configurationResultAggregator.completeEvaluations(configurationIndex, evaluatedScenarios);
 
-    var nextScenario = adaptiveStrategy.get().selectNextScenario(
-            allScenarios,
-            queuedScenarioNames,
-            evaluatedScenarios,
+    var nextConfiguration = adaptiveStrategy.get().selectNextConfiguration(
+            configurationIndex,
+            alreadyQueuedConfigurations,
+            evaluatedConfigurations,
             benchmark.get(),
             workload.get());
 
-    if (nextScenario.isEmpty()) {
+    if (nextConfiguration.isEmpty()) {
+      return Optional.empty();
+    }
+
+    var scenariosToAppend = configurationIndex.scenariosFor(nextConfiguration.get()).stream()
+            .filter(scenario -> queue.getItem(scenario.getMetadata().getName()) == null)
+            .toList();
+    if (scenariosToAppend.isEmpty()) {
       return Optional.empty();
     }
 
     var latestQueue = executionRepository.get(namespace, queue.getMetadata().getName());
-    latestQueue.getSpec().getItems().add(new ExecutionQueueItem(
-            nextScenario.get().getMetadata().getName(),
-            ExecutionQueueFactory.createItemResultFile(latestQueue, nextScenario.get().getMetadata().getName())));
+    for (Scenario scenario : scenariosToAppend) {
+      latestQueue.getSpec().getItems().add(new ExecutionQueueItem(
+              scenario.getMetadata().getName(),
+              ExecutionQueueFactory.createItemResultFile(latestQueue, scenario.getMetadata().getName())));
+    }
     latestQueue.setStatus(createStatus(latestQueue));
     var updatedQueue = executionRepository.update(latestQueue);
     executionRepository.updateStatus(updatedQueue);
-    logger.info("Adaptive strategy appended scenario {} to queue {}",
-            nextScenario.get().getMetadata().getName(),
+    logger.info("Adaptive strategy appended configuration {} with {} scenarios to queue {}",
+            nextConfiguration.get().summary(),
+            scenariosToAppend.size(),
             queue.getMetadata().getName());
     return Optional.of(updatedQueue);
   }
 
+  private Set<ResilienceConfigurationKey> queuedConfigurations(ExecutionQueue queue,
+                                                               ScenarioConfigurationIndex configurationIndex) {
+    return queue.getSpec().getItems().stream()
+            .map(ExecutionQueueItem::getScenario)
+            .map(configurationIndex::keyForScenarioName)
+            .flatMap(Optional::stream)
+            .collect(Collectors.toSet());
+  }
   private List<EvaluatedScenario> readEvaluatedScenarios(ExecutionQueue queue) {
     var results = fileProvider.getFileAsString(queue.getSpec().getResultFile());
     if (results.isEmpty()) {

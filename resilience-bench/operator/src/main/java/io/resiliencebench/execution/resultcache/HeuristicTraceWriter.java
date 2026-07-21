@@ -7,6 +7,7 @@ import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.queue.ExecutionQueue;
 import io.resiliencebench.resources.scenario.Scenario;
 import io.resiliencebench.resources.selection.EvaluatedScenario;
+import io.resiliencebench.resources.selection.configuration.ResilienceConfigurationKey;
 import io.resiliencebench.support.CustomResourceRepository;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;

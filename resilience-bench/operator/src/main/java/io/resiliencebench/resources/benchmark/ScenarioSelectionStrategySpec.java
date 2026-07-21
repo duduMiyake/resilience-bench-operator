@@ -16,19 +16,22 @@ public class ScenarioSelectionStrategySpec {
   @JsonPropertyDescription("The scenario selection strategy type: exhaustive, randomSampling or knnAdaptive")
   private String type;
 
-  @JsonPropertyDescription("Fraction of scenarios to select. Valid range is (0, 1]")
+  @JsonPropertyDescription("Fraction of configurations to select. Valid range is (0, 1]")
   private Double sampleRate;
 
-  @JsonPropertyDescription("Maximum number of scenarios to select")
+  @JsonPropertyDescription("Maximum number of scenarios to select. Deprecated for configuration-based selection; use maxConfigurations instead")
   private Integer maxScenarios;
+
+  @JsonPropertyDescription("Maximum number of resilience configurations to select")
+  private Integer maxConfigurations;
 
   @JsonPropertyDescription("Seed used by randomSampling for reproducible scenario selection")
   private Long seed;
 
-  @JsonPropertyDescription("Number of initial space-filling samples for adaptive strategies")
+  @JsonPropertyDescription("Number of initial space-filling configuration samples for adaptive strategies")
   private Integer initialSamples;
 
-  @JsonPropertyDescription("Maximum number of scenario evaluations for adaptive strategies")
+  @JsonPropertyDescription("Maximum number of configuration evaluations for adaptive strategies. Deprecated for configuration-based selection; use maxConfigurations instead")
   private Integer maxEvaluations;
 
   @JsonPropertyDescription("Objective metrics used to compare evaluated scenarios")
@@ -78,6 +81,14 @@ public class ScenarioSelectionStrategySpec {
 
   public Integer getMaxScenarios() {
     return maxScenarios;
+  }
+
+  public Integer getMaxConfigurations() {
+    return maxConfigurations;
+  }
+
+  public void setMaxConfigurations(Integer maxConfigurations) {
+    this.maxConfigurations = maxConfigurations;
   }
 
   public Long getSeed() {

@@ -85,6 +85,29 @@ class ScenarioSelectionStrategySelectorTest {
   }
 
   @Test
+  void should_fail_for_invalid_max_configurations() {
+    var strategySpec = new ScenarioSelectionStrategySpec("randomSampling", null, null, null);
+    strategySpec.setMaxConfigurations(0);
+    var benchmark = benchmark(strategySpec);
+
+    var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
+
+    assertEquals("strategy.maxConfigurations must be greater than 0", exception.getMessage());
+  }
+
+  @Test
+  void should_fail_when_initial_samples_is_greater_than_max_configurations() {
+    var strategySpec = new ScenarioSelectionStrategySpec(
+            "knnAdaptive", null, null, null,
+            3, 100, null, 3, 0.1);
+    strategySpec.setMaxConfigurations(2);
+    var benchmark = benchmark(strategySpec);
+
+    var exception = assertThrows(IllegalArgumentException.class, () -> selector.select(benchmark));
+
+    assertEquals("strategy.initialSamples must be less than or equal to strategy.maxConfigurations", exception.getMessage());
+  }
+  @Test
   void should_fail_for_invalid_initial_samples() {
     var benchmark = benchmark(new ScenarioSelectionStrategySpec(
             "knnAdaptive", null, null, null,

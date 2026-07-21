@@ -18,6 +18,7 @@ import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.queue.ExecutionQueue;
 import io.resiliencebench.resources.scenario.Scenario;
 import io.resiliencebench.resources.selection.ScenarioSelectionStrategySelector;
+import io.resiliencebench.resources.selection.configuration.ScenarioConfigurationIndex;
 import io.resiliencebench.resources.workload.Workload;
 import io.resiliencebench.support.CustomResourceRepository;
 
@@ -93,9 +94,12 @@ public class BenchmarkController implements Reconciler<Benchmark> {
     scenarioRepository.deleteAll(benchmark.getMetadata().getNamespace()); // TODO we don't support (yet) multiple reconciles loops
 
     var allScenarios = ScenarioFactory.create(benchmark, workload);
+    var allConfigurations = ScenarioConfigurationIndex.from(allScenarios);
     var selectedStrategy = scenarioSelectionStrategySelector.select(benchmark);
     var scenariosList = selectedStrategy.selectScenarios(allScenarios, benchmark, workload);
-    logStrategySelection(benchmark, allScenarios.size(), scenariosList.size());
+    var selectedConfigurations = ScenarioConfigurationIndex.from(scenariosList);
+    logStrategySelection(benchmark, allScenarios.size(), allConfigurations.totalConfigurations(),
+            scenariosList.size(), selectedConfigurations.totalConfigurations());
 
     if (scenarioSelectionStrategySelector.selectAdaptive(benchmark).isPresent()) {
       allScenarios.forEach(scenarioRepository::create);
@@ -105,7 +109,8 @@ public class BenchmarkController implements Reconciler<Benchmark> {
     return scenariosList;
   }
 
-  private void logStrategySelection(Benchmark benchmark, int totalScenarios, int selectedScenarios) {
+  private void logStrategySelection(Benchmark benchmark, int totalScenarios, int totalConfigurations,
+                                    int selectedScenarios, int selectedConfigurations) {
     var strategy = benchmark.getSpec().getStrategy();
     var strategyType = strategy == null || strategy.getType() == null || strategy.getType().isBlank()
             ? ScenarioSelectionStrategySpec.EXHAUSTIVE
@@ -113,16 +118,20 @@ public class BenchmarkController implements Reconciler<Benchmark> {
     var seed = strategy == null || strategy.getSeed() == null ? ScenarioSelectionStrategySpec.DEFAULT_SEED : strategy.getSeed();
     var sampleRate = strategy == null || strategy.getSampleRate() == null ? null : strategy.getSampleRate();
     var maxScenarios = strategy == null || strategy.getMaxScenarios() == null ? null : strategy.getMaxScenarios();
+    var maxConfigurations = strategy == null || strategy.getMaxConfigurations() == null ? null : strategy.getMaxConfigurations();
     var initialSamples = strategy == null || strategy.getInitialSamples() == null ? null : strategy.getInitialSamples();
     var maxEvaluations = strategy == null || strategy.getMaxEvaluations() == null ? null : strategy.getMaxEvaluations();
 
-    logger.info("Scenario selection strategy={} totalPossibleScenarios={} selectedScenarios={} seed={} sampleRate={} maxScenarios={} initialSamples={} maxEvaluations={}",
+    logger.info("Scenario selection strategy={} totalPossibleScenarios={} totalConfigurations={} selectedScenarios={} selectedConfigurations={} seed={} sampleRate={} maxScenarios={} maxConfigurations={} initialSamples={} maxEvaluations={}",
             strategyType,
             totalScenarios,
+            totalConfigurations,
             selectedScenarios,
+            selectedConfigurations,
             seed,
             sampleRate,
             maxScenarios,
+            maxConfigurations,
             initialSamples,
             maxEvaluations);
   }
