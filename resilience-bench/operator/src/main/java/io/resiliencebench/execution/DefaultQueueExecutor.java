@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static io.resiliencebench.support.Annotations.OWNED_BY;
 import static io.resiliencebench.resources.queue.ExecutionQueueItem.Status.*;
@@ -130,10 +129,9 @@ public class DefaultQueueExecutor implements QueueExecutor {
     logger.info("Replaying cached result for scenario: {}", scenario.getMetadata().getName());
     var replayedResult = scenarioResultCache.enrichResult(cachedResult.get(), benchmark, scenario, ScenarioResultCache.CACHE_HIT);
     scenarioResultCache.writeItemResult(executionQueue, scenario, replayedResult);
-    heuristicTraceWriter.appendStep(benchmark, executionQueue, scenario,
-            phase(executionQueue, benchmark, scenario.getMetadata().getName()),
-            ScenarioResultCache.CACHE_HIT, replayedResult);
     scenarioResultCache.appendToRun(executionQueue, replayedResult);
+    heuristicTraceWriter.recordScenarioCompleted(benchmark, executionQueue, scenario,
+            ScenarioResultCache.CACHE_HIT, replayedResult);
     finishItem(executionQueue, item);
     return true;
   }
@@ -183,23 +181,30 @@ public class DefaultQueueExecutor implements QueueExecutor {
     var alreadyQueuedConfigurations = queuedConfigurations(queue, configurationIndex);
     var evaluatedConfigurations = configurationResultAggregator.completeEvaluations(configurationIndex, evaluatedScenarios);
 
-    var nextConfiguration = adaptiveStrategy.get().selectNextConfiguration(
+    var nextDecision = adaptiveStrategy.get().selectNextDecision(
             configurationIndex,
             alreadyQueuedConfigurations,
             evaluatedConfigurations,
             benchmark.get(),
             workload.get());
 
-    if (nextConfiguration.isEmpty()) {
+    if (nextDecision.isEmpty()) {
       return Optional.empty();
     }
+    var nextConfiguration = nextDecision.get().getConfigurationKey();
 
-    var scenariosToAppend = configurationIndex.scenariosFor(nextConfiguration.get()).stream()
+    var scenariosToAppend = configurationIndex.scenariosFor(nextConfiguration).stream()
             .filter(scenario -> queue.getItem(scenario.getMetadata().getName()) == null)
             .toList();
     if (scenariosToAppend.isEmpty()) {
       return Optional.empty();
     }
+
+    var remainingConfigurations = (int) configurationIndex.keys().stream()
+            .filter(configuration -> !alreadyQueuedConfigurations.contains(configuration))
+            .count();
+    heuristicTraceWriter.recordConfigurationSelected(benchmark.get(), queue, configurationIndex,
+            nextDecision.get(), "adaptiveSelection", evaluatedConfigurations.size(), remainingConfigurations);
 
     var latestQueue = executionRepository.get(namespace, queue.getMetadata().getName());
     for (Scenario scenario : scenariosToAppend) {
@@ -211,7 +216,7 @@ public class DefaultQueueExecutor implements QueueExecutor {
     var updatedQueue = executionRepository.update(latestQueue);
     executionRepository.updateStatus(updatedQueue);
     logger.info("Adaptive strategy appended configuration {} with {} scenarios to queue {}",
-            nextConfiguration.get().summary(),
+            nextConfiguration.summary(),
             scenariosToAppend.size(),
             queue.getMetadata().getName());
     return Optional.of(updatedQueue);
@@ -249,28 +254,5 @@ public class DefaultQueueExecutor implements QueueExecutor {
     );
   }
 
-  private static String phase(ExecutionQueue executionQueue, Benchmark benchmark, String scenarioName) {
-    var strategy = benchmark.getSpec().getStrategy();
-    var type = strategy == null || strategy.getType() == null ? ScenarioSelectionStrategySpec.EXHAUSTIVE : strategy.getType();
-    if (ScenarioSelectionStrategySpec.EXHAUSTIVE.equalsIgnoreCase(type)) {
-      return "exhaustive";
-    }
-    if (ScenarioSelectionStrategySpec.RANDOM_SAMPLING.equalsIgnoreCase(type)) {
-      return "randomSampling";
-    }
-    if (ScenarioSelectionStrategySpec.KNN_ADAPTIVE.equalsIgnoreCase(type)) {
-      var index = IntStream.range(0, executionQueue.getSpec().getItems().size())
-              .filter(i -> scenarioName.equals(executionQueue.getSpec().getItems().get(i).getScenario()))
-              .findFirst()
-              .orElse(executionQueue.getSpec().getItems().size());
-      var initialSamples = strategy.getInitialSamples() == null
-              ? ScenarioSelectionStrategySpec.DEFAULT_INITIAL_SAMPLES
-              : strategy.getInitialSamples();
-      return index < initialSamples ? "initialSample" : "adaptiveSelection";
-    }
-    return "execution";
-  }
 }
-
-
 

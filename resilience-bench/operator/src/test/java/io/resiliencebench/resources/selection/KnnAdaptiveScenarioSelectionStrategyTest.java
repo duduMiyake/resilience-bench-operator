@@ -154,6 +154,37 @@ class KnnAdaptiveScenarioSelectionStrategyTest {
     assertEquals(vectors.get("same-config-1"), vectors.get("same-config-2"));
   }
 
+
+  @Test
+  void should_return_selection_metadata_used_for_next_decision() {
+    var benchmark = benchmark(new ScenarioSelectionStrategySpec(
+            "knnAdaptive", null, null, 42L,
+            2, 5, null, 1, 0.0));
+    var scenarios = of(
+            scenario("good", 0),
+            scenario("bad", 10),
+            scenario("near-good", 1));
+    var index = ScenarioConfigurationIndex.from(scenarios);
+    var good = key(index, "good");
+    var bad = key(index, "bad");
+
+    var nextDecision = strategy.selectNextDecision(
+            index,
+            Set.of(good, bad),
+            of(evaluated(good, 1), evaluated(bad, 0)),
+            benchmark,
+            new Workload());
+
+    assertTrue(nextDecision.isPresent());
+    assertEquals(key(index, "near-good"), nextDecision.get().getConfigurationKey());
+    var metadata = nextDecision.get().getMetadata();
+    assertTrue(metadata.containsKey("predictedScore"));
+    assertTrue(metadata.containsKey("uncertainty"));
+    assertEquals(metadata.getDouble("predictedScore") + metadata.getDouble("explorationBonus"),
+            metadata.getDouble("selectionScore"), 0.000001);
+    assertEquals(1, metadata.getJsonArray("nearestNeighbors").size());
+    assertEquals(good.hash(), metadata.getJsonArray("nearestNeighbors").getJsonObject(0).getString("configurationHash"));
+  }
   private static Benchmark benchmark(ScenarioSelectionStrategySpec strategySpec) {
     var benchmark = new Benchmark();
     benchmark.setSpec(new BenchmarkSpec("workload", strategySpec, of()));

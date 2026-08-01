@@ -25,6 +25,13 @@ As estrategias implementadas hoje sao:
 - `randomSampling`
 - `knnAdaptive`
 
+## Conceitos principais
+
+`Scenario` e a unidade concreta executada pelo operador. Ele combina workload/carga, taxa de falha e a configuracao aplicada aos connectors.
+
+`ResilienceConfigurationKey` e a unidade de decisao das estrategias. Ela normaliza apenas os connectors e suas configuracoes de resiliencia, como envs de retry, Istio retry/timeout/circuit breaker ou a ausencia de configuracao no baseline.
+
+`HeuristicDecision` e o registro de uma escolha feita pela estrategia. Uma decisao seleciona uma configuracao; essa configuracao pode gerar varios scenarios quando existem multiplas cargas ou taxas de falha. A configuracao so e considerada avaliada quando todos esses scenarios esperados terminam ou sao recuperados do cache.
 ## Exhaustive
 
 `exhaustive` executa todos os cenarios gerados pelo `ScenarioFactory`.
@@ -91,8 +98,6 @@ No `knnAdaptive`, os vizinhos sao sempre configuracoes ja avaliadas. Para saber 
 Primeiro, cada configuracao vira um vetor numerico. Carga e taxa de falha nao entram nesse vetor. Exemplos de campos:
 
 ```text
-workload.users
-fault.percentage
 connector.retry-frontend-checkout.source.env.GRPC_MAX_ATTEMPTS
 connector.retry-frontend-checkout.source.env.GRPC_INITIAL_BACKOFF
 connector.retry-checkout-payment.source.env.GRPC_BACKOFF_MULTIPLIER
@@ -250,20 +255,21 @@ Com dois connectors e baseline habilitado nos dois:
 
 Assim, o espaco de busca inclui tanto combinacoes com retry quanto casos em que um ou ambos os connectors ficam sem retry. Isso permite que estrategias como `exhaustive` e `knnAdaptive` comparem configuracoes de retry contra o baseline dentro da mesma rodada.
 
-Com `initialSamples: 20` e `maxEvaluations: 100`, a ferramenta executa primeiro 20 cenarios espalhados pelo espaco e depois escolhe mais 80, um por vez, usando os resultados ja coletados.
+Com `initialSamples: 20` e `maxEvaluations: 100`, a ferramenta seleciona primeiro 20 configuracoes espalhadas pelo espaco. Cada configuracao selecionada gera todos os seus scenarios obrigatorios de carga x falha. Depois disso, a estrategia escolhe novas configuracoes usando os resultados agregados ja coletados.
 
 ## Cache/replay e trace
 
-As estrategias continuam escolhendo cenarios da mesma forma, mesmo quando `spec.resultCache` esta habilitado. O cache entra apenas depois da escolha:
+As estrategias continuam escolhendo configuracoes da mesma forma, mesmo quando `spec.resultCache` esta habilitado. O cache entra apenas depois da escolha:
 
-1. a estrategia escolhe o cenario;
-2. o executor procura o resultado no cache estavel por `scenarioHash`;
-3. em caso de cache hit, o resultado e agregado na rodada atual sem executar k6/fault injection;
-4. em caso de cache miss, o cenario e executado normalmente e o resultado passa a popular o cache.
+1. a estrategia escolhe uma configuracao;
+2. o executor adiciona todos os scenarios dessa configuracao a fila;
+3. para cada scenario, o executor procura o resultado no cache estavel por `scenarioHash`;
+4. em caso de cache hit, o resultado e agregado na rodada atual sem executar k6/fault injection;
+5. em caso de cache miss, o scenario e executado normalmente e o resultado passa a popular o cache.
 
-Isso preserva a avaliacao honesta das heuristicas: elas nao consultam resultados de cenarios ainda nao escolhidos.
+Isso preserva a avaliacao honesta das heuristicas: elas nao consultam resultados de configuracoes ainda nao escolhidas.
 
-Com cache habilitado, a rodada tambem registra um `trace.json` no diretorio da run. Esse trace guarda a ordem dos cenarios escolhidos, o hash do cenario, a origem do resultado (`cacheHit` ou `executed`) e o score calculado a partir do resultado. Ele deve ser usado futuramente para visualizacoes em grafo do caminho percorrido pela heuristica.
+Com cache habilitado, a rodada tambem registra um `trace.json` no diretorio da run. O trace usa `schemaVersion: 2` e registra decisoes por configuracao, eventos de conclusao de scenarios, resultados agregados por configuracao e metadata especifica da heuristica. Para `knnAdaptive`, essa metadata inclui `predictedScore`, `uncertainty`, `explorationBonus`, `selectionScore` e `nearestNeighbors`, calculados pela estrategia no momento real da selecao.
 
 Exemplo de configuracao:
 
@@ -286,5 +292,3 @@ spec:
 `randomSampling` escolhe uma amostra fixa e reprodutivel.
 
 `knnAdaptive` escolhe uma amostra inicial espalhada e depois prioriza cenarios parecidos com os melhores resultados ja observados, com um bonus configuravel para exploracao.
-
-

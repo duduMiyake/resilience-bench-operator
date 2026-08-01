@@ -11,9 +11,19 @@ import java.util.Set;
 
 public interface AdaptiveConfigurationSelectionStrategy extends ConfigurationSelectionStrategy {
 
-  Optional<ResilienceConfigurationKey> selectNextConfiguration(ScenarioConfigurationIndex configurationIndex,
-                                                               Set<ResilienceConfigurationKey> alreadyQueuedConfigurations,
-                                                               List<EvaluatedConfiguration> evaluatedConfigurations,
-                                                               Benchmark benchmark,
-                                                               Workload workload);
+  Optional<ConfigurationSelectionDecision> selectNextDecision(ScenarioConfigurationIndex configurationIndex,
+                                                              Set<ResilienceConfigurationKey> alreadyQueuedConfigurations,
+                                                              List<EvaluatedConfiguration> evaluatedConfigurations,
+                                                              Benchmark benchmark,
+                                                              Workload workload);
+
+  default Optional<ResilienceConfigurationKey> selectNextConfiguration(
+          ScenarioConfigurationIndex configurationIndex,
+          Set<ResilienceConfigurationKey> alreadyQueuedConfigurations,
+          List<EvaluatedConfiguration> evaluatedConfigurations,
+          Benchmark benchmark,
+          Workload workload) {
+    return selectNextDecision(configurationIndex, alreadyQueuedConfigurations, evaluatedConfigurations, benchmark, workload)
+            .map(ConfigurationSelectionDecision::getConfigurationKey);
+  }
 }

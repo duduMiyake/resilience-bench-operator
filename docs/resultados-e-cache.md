@@ -60,20 +60,21 @@ No S3 esses caminhos sao object keys. A separacao evita misturar uma rodada exha
 
 O projeto usa a abstracao `FileProvider` para gravar e ler arquivos. Quando a configuracao seleciona S3, `S3FileProvider` transforma caminhos como `/results/...` em objetos no bucket configurado.
 
-O cache/replay nao coloca S3 dentro das heuristicas. A heuristica escolhe o cenario; depois o executor tenta buscar o resultado daquele cenario no cache.
+O cache/replay nao coloca S3 dentro das heuristicas. A heuristica escolhe uma configuracao; depois o executor tenta buscar no cache o resultado de cada scenario associado aquela configuracao.
 
 ## Comportamento readWrite
 
 Com `mode: readWrite`:
 
-1. a estrategia escolhe o proximo cenario;
-2. o executor calcula o hash da configuracao do cenario;
-3. tenta ler `/results/cache/<benchmarkName>/<scenarioHash>.json`;
-4. se encontrar, agrega o resultado na rodada atual e marca o item como finalizado;
-5. se nao encontrar, executa o cenario normalmente;
-6. ao final da execucao real, grava o resultado no agregado da rodada e no cache.
+1. a estrategia escolhe uma configuracao de resiliencia;
+2. o executor adiciona todos os scenarios dessa configuracao a fila;
+3. para cada scenario, calcula o `scenarioHash`;
+4. tenta ler `/results/cache/<benchmarkName>/<scenarioHash>.json`;
+5. se encontrar, agrega o resultado na rodada atual e marca o item como finalizado;
+6. se nao encontrar, executa o scenario normalmente;
+7. ao final da execucao real, grava o resultado no agregado da rodada e no cache.
 
-Assim, a avaliacao continua honesta: a heuristica so aprende com resultados dos cenarios que ela ja escolheu.
+Assim, a avaliacao continua honesta: a heuristica so aprende com resultados das configuracoes que ela ja selecionou.
 
 ## Chave estavel do cache
 
@@ -101,29 +102,94 @@ O resultado salvo inclui metadados como:
 
 ## Trace da heuristica
 
-Com cache habilitado, cada rodada tambem pode gerar um `trace.json` no diretorio da run. Ele registra o caminho escolhido pela estrategia:
+Com cache habilitado, cada rodada gera um `trace.json` no diretorio da run. O formato atual e versionado com `schemaVersion: 2` e usa a configuracao de resiliencia como unidade principal de decisao.
+
+A diferenca entre os conceitos e:
+
+- `Scenario`: unidade concreta de execucao, com workload/carga, fault rate e configuracao aplicada.
+- `ResilienceConfiguration`: conjunto normalizado dos connectors e parametros de resiliencia. Carga e taxa de falha nao fazem parte da chave dessa configuracao.
+- `HeuristicDecision`: escolha feita por uma estrategia para avaliar uma configuracao.
+
+O trace diferencia tres eventos:
+
+- `CONFIGURATION_SELECTED`: a heuristica selecionou uma configuracao.
+- `SCENARIO_COMPLETED`: um scenario daquela configuracao terminou ou foi recuperado do cache.
+- `CONFIGURATION_EVALUATED`: todos os scenarios esperados daquela configuracao terminaram e o resultado agregado ficou disponivel.
+
+Exemplo simplificado:
 
 ```json
 {
-  "benchmark": "onlineboutique",
-  "strategy": "knnAdaptive",
-  "runId": "2026-07-20-10-30-00",
-  "resultFile": "/results/runs/heuristics/onlineboutique/knnAdaptive/2026-07-20-10-30-00/results.json",
-  "steps": [
+  "schemaVersion": 2,
+  "benchmark": "hipstershop",
+  "heuristic": "knnAdaptive",
+  "runId": "2026-08-01-18-20-27",
+  "resultFile": "/results/runs/heuristics/hipstershop/knnAdaptive/2026-08-01-18-20-27/results.json",
+  "startedAt": "2026-08-01T18:20:27",
+  "decisions": [
     {
-      "step": 1,
-      "phase": "initialSample",
-      "scenario": "scenario-1",
-      "scenarioHash": "...",
-      "source": "cacheHit",
-      "resultScore": 0.82
+      "decision": 21,
+      "phase": "adaptiveSelection",
+      "selectedAt": "2026-08-01T18:35:10",
+      "evaluatedConfigurations": 20,
+      "remainingConfigurations": 1349,
+      "configuration": {
+        "hash": "...",
+        "summary": "retry-frontend-checkout:frontendservice->checkoutservice=CONFIGURED",
+        "normalized": { "connectors": [] }
+      },
+      "selection": {
+        "heuristic": "knnAdaptive",
+        "metadata": {
+          "predictedScore": 0.72,
+          "uncertainty": 0.15,
+          "explorationBonus": 0.015,
+          "selectionScore": 0.735,
+          "nearestNeighbors": [
+            {
+              "configurationHash": "...",
+              "configurationSummary": "...",
+              "distance": 0.1,
+              "realScore": 0.8
+            }
+          ]
+        }
+      },
+      "expectedScenarios": [
+        {
+          "scenario": "retry-checkout-300vu-50f-00001",
+          "workload": { "name": "k6-loadtest", "users": 300 },
+          "fault": { "provider": "envoy", "percentage": 50, "services": ["paymentservice"] }
+        }
+      ],
+      "executions": [
+        {
+          "scenario": "retry-checkout-300vu-50f-00001",
+          "source": "cacheHit",
+          "resultScore": 0.61,
+          "completedAt": "2026-08-01T18:35:11"
+        }
+      ],
+      "aggregatedResult": {
+        "score": 0.61,
+        "bestScoreSoFar": 0.72,
+        "improvedBest": false,
+        "metrics": {}
+      }
     }
-  ]
+  ],
+  "events": [
+    { "sequence": 1, "type": "CONFIGURATION_SELECTED", "decision": 21 },
+    { "sequence": 2, "type": "SCENARIO_COMPLETED", "decision": 21 },
+    { "sequence": 3, "type": "CONFIGURATION_EVALUATED", "decision": 21 }
+  ],
+  "totalConfigurationsEvaluated": 1,
+  "totalScenariosExecuted": 0,
+  "totalCacheHits": 1
 }
 ```
 
-Esse arquivo deve servir como base para uma visualizacao futura em grafo, onde cada step representa um cenario escolhido e a ordem dos steps representa o caminho percorrido pela heuristica.
-
+A metadata especifica de cada heuristica fica dentro de `selection.metadata`. Para `knnAdaptive`, os valores de `predictedScore`, `uncertainty`, `explorationBonus`, `selectionScore` e `nearestNeighbors` sao produzidos pela propria estrategia no momento da escolha. O writer apenas serializa esses dados.
 ## Importacao de resultados antigos
 
 O operador pode rodar um backfill de cache na inicializacao quando estas variaveis de ambiente estiverem configuradas:
@@ -156,4 +222,3 @@ hipstershop/results/cache/hipstershop/<scenarioHash>.json
 Depois que o log indicar que o backfill terminou, remova ou desative `RESULT_CACHE_BACKFILL_ENABLED` para o operador nao tentar importar o mesmo arquivo a cada reinicio.
 
 Resultados antigos precisam conter metadados suficientes (`workload_name`, `workload_users`, `fault` quando existir e `connectors`) para gerar uma chave equivalente aos cenarios novos.
-

@@ -5,7 +5,6 @@ import io.resiliencebench.execution.io.FileProviderFactory;
 import io.resiliencebench.execution.resultcache.HeuristicTraceWriter;
 import io.resiliencebench.execution.resultcache.ScenarioResultCache;
 import io.resiliencebench.resources.benchmark.Benchmark;
-import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.support.CustomResourceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +15,6 @@ import io.resiliencebench.resources.queue.ExecutionQueue;
 import io.resiliencebench.resources.scenario.Scenario;
 import io.vertx.core.json.JsonObject;
 
-import java.util.stream.IntStream;
 
 @Service
 public class ResultFileStep extends ExecutorStep {
@@ -61,10 +59,9 @@ public class ResultFileStep extends ExecutorStep {
               scenario,
               ScenarioResultCache.EXECUTED);
       scenarioResultCache.writeItemResult(executionQueue, scenario, currentResultsJson);
-      heuristicTraceWriter.appendStep(benchmark.get(), executionQueue, scenario,
-              phase(executionQueue, benchmark.get(), scenario.getMetadata().getName()),
-              ScenarioResultCache.EXECUTED, currentResultsJson);
       scenarioResultCache.appendToRun(executionQueue, currentResultsJson);
+      heuristicTraceWriter.recordScenarioCompleted(benchmark.get(), executionQueue, scenario,
+              ScenarioResultCache.EXECUTED, currentResultsJson);
       scenarioResultCache.saveToCache(benchmark.get(), scenario, currentResultsJson);
     } else {
       logger.warn("No results found for {}", executionQueueItem.getResultFile());
@@ -75,27 +72,5 @@ public class ResultFileStep extends ExecutorStep {
     return scenarioResultCache.getRunResults(executionQueue);
   }
 
-  private static String phase(ExecutionQueue executionQueue, Benchmark benchmark, String scenarioName) {
-    var strategy = benchmark.getSpec().getStrategy();
-    var type = strategy == null || strategy.getType() == null ? ScenarioSelectionStrategySpec.EXHAUSTIVE : strategy.getType();
-    if (ScenarioSelectionStrategySpec.EXHAUSTIVE.equalsIgnoreCase(type)) {
-      return "exhaustive";
-    }
-    if (ScenarioSelectionStrategySpec.RANDOM_SAMPLING.equalsIgnoreCase(type)) {
-      return "randomSampling";
-    }
-    if (ScenarioSelectionStrategySpec.KNN_ADAPTIVE.equalsIgnoreCase(type)) {
-      var index = IntStream.range(0, executionQueue.getSpec().getItems().size())
-              .filter(i -> scenarioName.equals(executionQueue.getSpec().getItems().get(i).getScenario()))
-              .findFirst()
-              .orElse(executionQueue.getSpec().getItems().size());
-      var initialSamples = strategy.getInitialSamples() == null
-              ? ScenarioSelectionStrategySpec.DEFAULT_INITIAL_SAMPLES
-              : strategy.getInitialSamples();
-      return index < initialSamples ? "initialSample" : "adaptiveSelection";
-    }
-    return "execution";
-  }
 }
-
 

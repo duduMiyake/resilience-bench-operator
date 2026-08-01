@@ -5,6 +5,8 @@ import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.selection.configuration.ResilienceConfigurationKey;
 import io.resiliencebench.resources.selection.configuration.ScenarioConfigurationIndex;
 import io.resiliencebench.resources.workload.Workload;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -40,7 +42,7 @@ public class KnnAdaptiveScenarioSelectionStrategy implements AdaptiveConfigurati
   }
 
   @Override
-  public Optional<ResilienceConfigurationKey> selectNextConfiguration(
+  public Optional<ConfigurationSelectionDecision> selectNextDecision(
           ScenarioConfigurationIndex configurationIndex,
           Set<ResilienceConfigurationKey> alreadyQueuedConfigurations,
           List<EvaluatedConfiguration> evaluatedConfigurations,
@@ -67,19 +69,27 @@ public class KnnAdaptiveScenarioSelectionStrategy implements AdaptiveConfigurati
       Set<ResilienceConfigurationKey> queued = new HashSet<>(alreadyQueuedConfigurations);
       return selectSpaceFillingConfigurations(configurationIndex, seed(benchmark), allConfigurations.size()).stream()
               .filter(configuration -> !queued.contains(configuration))
-              .findFirst();
+              .findFirst()
+              .map(configuration -> ConfigurationSelectionDecision.of(
+                      configuration,
+                      ScenarioSelectionStrategySpec.KNN_ADAPTIVE,
+                      new JsonObject().put("selectionMode", "spaceFilling")));
     }
 
     Map<ResilienceConfigurationKey, Map<String, Double>> vectors = encodeConfigurations(allConfigurations);
     return candidates.stream()
-            .max(Comparator.comparingDouble(candidate ->
-                    selectionScore(candidate, evaluatedConfigurations, vectors, benchmark)));
+            .map(candidate -> evaluateCandidate(candidate, evaluatedConfigurations, vectors, benchmark))
+            .max(Comparator.comparingDouble(SelectionEvaluation::selectionScore))
+            .map(evaluation -> ConfigurationSelectionDecision.of(
+                    evaluation.configuration(),
+                    ScenarioSelectionStrategySpec.KNN_ADAPTIVE,
+                    evaluation.toMetadata()));
   }
 
-  private static double selectionScore(ResilienceConfigurationKey candidate,
-                                       List<EvaluatedConfiguration> evaluatedConfigurations,
-                                       Map<ResilienceConfigurationKey, Map<String, Double>> vectors,
-                                       Benchmark benchmark) {
+  private static SelectionEvaluation evaluateCandidate(ResilienceConfigurationKey candidate,
+                                                       List<EvaluatedConfiguration> evaluatedConfigurations,
+                                                       Map<ResilienceConfigurationKey, Map<String, Double>> vectors,
+                                                       Benchmark benchmark) {
     var strategy = benchmark.getSpec().getStrategy();
     int neighbors = strategy.getNeighbors() == null
             ? ScenarioSelectionStrategySpec.DEFAULT_NEIGHBORS
@@ -94,13 +104,14 @@ public class KnnAdaptiveScenarioSelectionStrategy implements AdaptiveConfigurati
             .filter(evaluatedConfiguration -> vectors.containsKey(evaluatedConfiguration.getConfigurationKey()))
             .map(evaluatedConfiguration -> new Neighbor(
                     evaluatedConfiguration,
-                    distance(candidateVector, vectors.get(evaluatedConfiguration.getConfigurationKey()))))
+                    distance(candidateVector, vectors.get(evaluatedConfiguration.getConfigurationKey())),
+                    objectiveScore(evaluatedConfiguration, benchmark)))
             .sorted(Comparator.comparingDouble(Neighbor::distance))
             .limit(neighbors)
             .toList();
 
     if (nearestNeighbors.isEmpty()) {
-      return 0.0;
+      return new SelectionEvaluation(candidate, 0.0, 0.0, 0.0, 0.0, nearestNeighbors);
     }
 
     double weightedScore = 0.0;
@@ -108,14 +119,46 @@ public class KnnAdaptiveScenarioSelectionStrategy implements AdaptiveConfigurati
     double uncertainty = nearestNeighbors.get(0).distance();
     for (Neighbor neighbor : nearestNeighbors) {
       double weight = 1.0 / (neighbor.distance() + 0.000001);
-      weightedScore += weight * objectiveScore(neighbor.evaluatedConfiguration(), benchmark);
+      weightedScore += weight * neighbor.realScore();
       totalWeight += weight;
     }
 
     double predictedScore = weightedScore / totalWeight;
-    return predictedScore + explorationWeight * uncertainty;
+    double explorationBonus = explorationWeight * uncertainty;
+    return new SelectionEvaluation(candidate, predictedScore, uncertainty, explorationBonus,
+            predictedScore + explorationBonus, nearestNeighbors);
   }
 
-  private record Neighbor(EvaluatedConfiguration evaluatedConfiguration, double distance) {
+  private record SelectionEvaluation(ResilienceConfigurationKey configuration,
+                                     double predictedScore,
+                                     double uncertainty,
+                                     double explorationBonus,
+                                     double selectionScore,
+                                     List<Neighbor> nearestNeighbors) {
+
+    JsonObject toMetadata() {
+      return new JsonObject()
+              .put("predictedScore", predictedScore)
+              .put("uncertainty", uncertainty)
+              .put("explorationBonus", explorationBonus)
+              .put("selectionScore", selectionScore)
+              .put("nearestNeighbors", new JsonArray(nearestNeighbors.stream()
+                      .map(Neighbor::toJson)
+                      .toList()));
+    }
+  }
+
+  private record Neighbor(EvaluatedConfiguration evaluatedConfiguration, double distance, double realScore) {
+
+    JsonObject toJson() {
+      var configuration = evaluatedConfiguration.getConfigurationKey();
+      return new JsonObject()
+              .put("configurationHash", configuration.hash())
+              .put("configurationSummary", configuration.summary())
+              .put("distance", distance)
+              .put("realScore", realScore)
+              .put("expectedContexts", evaluatedConfiguration.getExpectedContexts())
+              .put("completedContexts", evaluatedConfiguration.getCompletedContexts());
+    }
   }
 }
