@@ -17,8 +17,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,21 +49,40 @@ public class HeuristicTraceWriter {
     this.configurationResultAggregator = configurationResultAggregator;
   }
 
+  public void recordRunStarted(Benchmark benchmark,
+                               ExecutionQueue queue,
+                               int totalConfigurationSpaceSize,
+                               int initialSamples,
+                               int maxEvaluations) {
+    if (!shouldTrace(benchmark)) {
+      return;
+    }
+    var traceFile = traceFile(benchmark, queue);
+    var trace = getTrace(traceFile, benchmark, queue);
+    trace.put("totalConfigurationSpaceSize", totalConfigurationSpaceSize)
+            .put("initialSamples", initialSamples)
+            .put("maxEvaluations", maxEvaluations);
+    updateSummary(trace);
+    fileProvider.writeToFile(traceFile, trace.encode());
+  }
+
   public void recordSelectedConfigurations(Benchmark benchmark,
                                            ExecutionQueue queue,
                                            ScenarioConfigurationIndex configurationIndex,
                                            List<ConfigurationSelectionDecision> decisions,
                                            String phase,
                                            int evaluatedConfigurations,
-                                           int remainingConfigurations) {
-    if (!scenarioResultCache.isReadWriteEnabled(benchmark) || decisions.isEmpty()) {
+                                           int candidateCount) {
+    if (!shouldTrace(benchmark) || decisions.isEmpty()) {
       return;
     }
     var traceFile = traceFile(benchmark, queue);
     var trace = getTrace(traceFile, benchmark, queue);
-    for (ConfigurationSelectionDecision decision : decisions) {
+    for (int index = 0; index < decisions.size(); index++) {
+      var decision = decisions.get(index);
+      var candidatesBeforeSelection = Math.max(0, candidateCount - index);
       appendConfigurationSelected(trace, configurationIndex, decision, phase,
-              evaluatedConfigurations, remainingConfigurations);
+              evaluatedConfigurations, candidatesBeforeSelection);
     }
     updateSummary(trace);
     fileProvider.writeToFile(traceFile, trace.encode());
@@ -76,27 +94,48 @@ public class HeuristicTraceWriter {
                                           ConfigurationSelectionDecision decision,
                                           String phase,
                                           int evaluatedConfigurations,
-                                          int remainingConfigurations) {
+                                          int candidateCount) {
     recordSelectedConfigurations(benchmark, queue, configurationIndex, List.of(decision), phase,
-            evaluatedConfigurations, remainingConfigurations);
+            evaluatedConfigurations, candidateCount);
   }
 
   public void recordScenarioCompleted(Benchmark benchmark, ExecutionQueue queue, Scenario scenario,
                                       String source, JsonObject result) {
-    if (!scenarioResultCache.isReadWriteEnabled(benchmark)) {
+    if (!shouldTrace(benchmark)) {
       return;
     }
     var traceFile = traceFile(benchmark, queue);
     var trace = getTrace(traceFile, benchmark, queue);
     var configurationIndex = ScenarioConfigurationIndex.from(scenariosForBenchmark(queue, benchmark));
     var configurationKey = ResilienceConfigurationKey.from(scenario);
-    var decision = findDecision(trace, configurationKey.hash())
-            .orElseGet(() -> appendConfigurationSelected(trace, configurationIndex,
-                    ConfigurationSelectionDecision.of(configurationKey, ResultStoragePathFactory.strategyType(benchmark)),
-                    phaseForFallback(benchmark), 0, 0));
+    var decision = findDecision(trace, configurationKey.hash());
+    if (decision.isEmpty()) {
+      appendTraceInconsistency(trace, scenario, source, configurationKey);
+      updateSummary(trace);
+      fileProvider.writeToFile(traceFile, trace.encode());
+      return;
+    }
 
-    appendScenarioCompletedEvent(trace, decision, scenario, source, result);
-    appendConfigurationEvaluatedIfComplete(trace, benchmark, queue, configurationIndex, configurationKey, decision);
+    appendScenarioCompletedEvent(trace, decision.get(), scenario, source, result);
+    appendConfigurationEvaluatedIfComplete(trace, benchmark, queue, configurationIndex, configurationKey, decision.get());
+    updateSummary(trace);
+    fileProvider.writeToFile(traceFile, trace.encode());
+  }
+
+  public void recordRunCompleted(Benchmark benchmark, ExecutionQueue queue) {
+    if (!shouldTrace(benchmark)) {
+      return;
+    }
+    var traceFile = traceFile(benchmark, queue);
+    var trace = getTrace(traceFile, benchmark, queue);
+    if (trace.getString("finishedAt") != null) {
+      return;
+    }
+    var finishedAt = now();
+    trace.put("finishedAt", finishedAt);
+    appendEvent(trace, new JsonObject()
+            .put("type", "RUN_COMPLETED")
+            .put("timestamp", finishedAt));
     updateSummary(trace);
     fileProvider.writeToFile(traceFile, trace.encode());
   }
@@ -106,7 +145,7 @@ public class HeuristicTraceWriter {
                                                  ConfigurationSelectionDecision decision,
                                                  String phase,
                                                  int evaluatedConfigurations,
-                                                 int remainingConfigurations) {
+                                                 int candidateCount) {
     var configurationKey = decision.getConfigurationKey();
     var existingDecision = findDecision(trace, configurationKey.hash());
     if (existingDecision.isPresent()) {
@@ -116,18 +155,24 @@ public class HeuristicTraceWriter {
     var decisions = trace.getJsonArray("decisions", new JsonArray());
     var decisionNumber = decisions.size() + 1;
     var selectedAt = decision.getSelectedAt();
+    var initialBatch = !"adaptiveSelection".equals(phase);
     var decisionJson = new JsonObject()
             .put("decision", decisionNumber)
             .put("phase", phase)
+            .put("selectionMode", initialBatch ? "INITIAL_BATCH" : "SEQUENTIAL")
             .put("selectedAt", selectedAt)
             .put("evaluatedConfigurations", evaluatedConfigurations)
-            .put("remainingConfigurations", remainingConfigurations)
+            .put("candidateCount", candidateCount)
+            .put("remainingConfigurations", Math.max(0, candidateCount - 1))
             .put("configuration", configurationJson(configurationKey))
             .put("selection", new JsonObject()
                     .put("heuristic", decision.getHeuristic())
                     .put("metadata", decision.getMetadata()))
             .put("expectedScenarios", expectedScenarios(configurationIndex, configurationKey))
             .put("executions", new JsonArray());
+    if (initialBatch) {
+      decisionJson.put("batch", 1);
+    }
     decisions.add(decisionJson);
     trace.put("decisions", decisions);
     appendEvent(trace, new JsonObject()
@@ -135,6 +180,7 @@ public class HeuristicTraceWriter {
             .put("decision", decisionNumber)
             .put("phase", phase)
             .put("configurationHash", configurationKey.hash())
+            .put("timestamp", selectedAt)
             .put("selectedAt", selectedAt));
     return decisionJson;
   }
@@ -165,7 +211,20 @@ public class HeuristicTraceWriter {
             .put("scenario", scenarioName)
             .put("source", source)
             .put("resultScore", execution.getDouble("resultScore"))
+            .put("timestamp", completedAt)
             .put("completedAt", completedAt));
+  }
+
+  private void appendTraceInconsistency(JsonObject trace, Scenario scenario, String source,
+                                        ResilienceConfigurationKey configurationKey) {
+    appendEvent(trace, new JsonObject()
+            .put("type", "TRACE_INCONSISTENCY")
+            .put("reason", "SCENARIO_COMPLETED_WITHOUT_SELECTION")
+            .put("scenario", scenario.getMetadata().getName())
+            .put("source", source)
+            .put("scenarioHash", cacheKeyFactory.hash(scenario))
+            .put("configurationHash", configurationKey.hash())
+            .put("timestamp", now()));
   }
 
   private void appendConfigurationEvaluatedIfComplete(JsonObject trace, Benchmark benchmark, ExecutionQueue queue,
@@ -208,6 +267,7 @@ public class HeuristicTraceWriter {
             .put("score", currentScore)
             .put("bestScoreSoFar", best.score())
             .put("improvedBest", improvedBest)
+            .put("timestamp", evaluatedAt)
             .put("evaluatedAt", evaluatedAt));
   }
 
@@ -259,6 +319,9 @@ public class HeuristicTraceWriter {
 
   private void appendEvent(JsonObject trace, JsonObject event) {
     var events = trace.getJsonArray("events", new JsonArray());
+    if (event.getString("timestamp") == null) {
+      event.put("timestamp", now());
+    }
     event.put("sequence", events.size() + 1);
     events.add(event);
     trace.put("events", events);
@@ -267,6 +330,7 @@ public class HeuristicTraceWriter {
   private void updateSummary(JsonObject trace) {
     var decisions = trace.getJsonArray("decisions", new JsonArray());
     int totalConfigurationsEvaluated = 0;
+    int totalScenariosCompleted = 0;
     int totalScenariosExecuted = 0;
     int totalCacheHits = 0;
     for (Object value : decisions) {
@@ -280,6 +344,7 @@ public class HeuristicTraceWriter {
         if (!(executionValue instanceof JsonObject execution)) {
           continue;
         }
+        totalScenariosCompleted++;
         if (ScenarioResultCache.CACHE_HIT.equals(execution.getString("source"))) {
           totalCacheHits++;
         }
@@ -288,12 +353,17 @@ public class HeuristicTraceWriter {
         }
       }
     }
+    trace.put("totalConfigurationsSelected", decisions.size());
     trace.put("totalConfigurationsEvaluated", totalConfigurationsEvaluated);
+    trace.put("totalScenariosCompleted", totalScenariosCompleted);
     trace.put("totalScenariosExecuted", totalScenariosExecuted);
     trace.put("totalCacheHits", totalCacheHits);
-    if (totalConfigurationsEvaluated == decisions.size() && trace.getString("finishedAt") == null) {
-      trace.put("finishedAt", now());
-    }
+    var inconsistencies = trace.getJsonArray("events", new JsonArray()).stream()
+            .filter(JsonObject.class::isInstance)
+            .map(JsonObject.class::cast)
+            .filter(event -> "TRACE_INCONSISTENCY".equals(event.getString("type")))
+            .count();
+    trace.put("totalTraceInconsistencies", inconsistencies);
   }
 
   private JsonArray expectedScenarios(ScenarioConfigurationIndex configurationIndex,
@@ -332,33 +402,33 @@ public class HeuristicTraceWriter {
   }
 
   private static JsonObject createTrace(Benchmark benchmark, ExecutionQueue queue) {
-    var strategy = benchmark.getSpec().getStrategy();
+    var startedAt = now();
     var trace = new JsonObject()
             .put("schemaVersion", SCHEMA_VERSION)
             .put("benchmark", benchmark.getMetadata().getName())
             .put("heuristic", ResultStoragePathFactory.strategyType(benchmark))
             .put("runId", runIdFromResultFile(queue.getSpec().getResultFile()))
             .put("resultFile", queue.getSpec().getResultFile())
-            .put("startedAt", now())
+            .put("startedAt", startedAt)
             .put("decisions", new JsonArray())
             .put("events", new JsonArray())
+            .put("totalConfigurationSpaceSize", 0)
+            .put("totalConfigurationsSelected", 0)
             .put("totalConfigurationsEvaluated", 0)
+            .put("totalScenariosCompleted", 0)
             .put("totalScenariosExecuted", 0)
-            .put("totalCacheHits", 0);
-    if (strategy != null) {
-      trace.put("initialSamples", strategy.getInitialSamples());
-      trace.put("maxEvaluations", strategy.getMaxEvaluations());
-      trace.put("maxConfigurations", strategy.getMaxConfigurations());
-    }
+            .put("totalCacheHits", 0)
+            .put("totalTraceInconsistencies", 0);
+    trace.getJsonArray("events").add(new JsonObject()
+            .put("type", "RUN_STARTED")
+            .put("timestamp", startedAt)
+            .put("sequence", 1));
     return trace;
   }
 
-  private static String phaseForFallback(Benchmark benchmark) {
-    var type = ResultStoragePathFactory.strategyType(benchmark);
-    if (ScenarioSelectionStrategySpec.KNN_ADAPTIVE.equalsIgnoreCase(type)) {
-      return "adaptiveSelection";
-    }
-    return type;
+  private static boolean shouldTrace(Benchmark benchmark) {
+    return !ScenarioSelectionStrategySpec.EXHAUSTIVE.equalsIgnoreCase(
+            ResultStoragePathFactory.strategyType(benchmark));
   }
 
   private static String traceFile(Benchmark benchmark, ExecutionQueue queue) {
@@ -376,7 +446,7 @@ public class HeuristicTraceWriter {
   }
 
   private static String now() {
-    return LocalDateTime.now(ZoneOffset.UTC).toString();
+    return Instant.now().toString();
   }
 
   private record BestConfiguration(String hash, String summary, double score) {

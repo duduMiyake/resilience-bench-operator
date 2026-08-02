@@ -94,6 +94,12 @@ public class DefaultQueueExecutor implements QueueExecutor {
       logger.info("No item available for queue: {}", queueToExecute.getMetadata().getName());
       if (queueToExecute.isDone()) {
         logger.info("All items finished for: {}", queueToExecute.getMetadata().getName());
+        benchmarkRepository.find(queueToExecute.getMetadata().getNamespace(),
+                        queueToExecute.getSpec().getBenchmark())
+                .filter(benchmark -> scenarioSelectionStrategySelector
+                        .selectAdaptive(benchmark).isEmpty())
+                .ifPresent(benchmark -> heuristicTraceWriter
+                        .recordRunCompleted(benchmark, queueToExecute));
       }
     }
   }
@@ -189,6 +195,9 @@ public class DefaultQueueExecutor implements QueueExecutor {
             workload.get());
 
     if (nextDecision.isEmpty()) {
+      if (queue.isDone()) {
+        heuristicTraceWriter.recordRunCompleted(benchmark.get(), queue);
+      }
       return Optional.empty();
     }
     var nextConfiguration = nextDecision.get().getConfigurationKey();
@@ -200,11 +209,11 @@ public class DefaultQueueExecutor implements QueueExecutor {
       return Optional.empty();
     }
 
-    var remainingConfigurations = (int) configurationIndex.keys().stream()
+    var candidateCount = (int) configurationIndex.keys().stream()
             .filter(configuration -> !alreadyQueuedConfigurations.contains(configuration))
             .count();
     heuristicTraceWriter.recordConfigurationSelected(benchmark.get(), queue, configurationIndex,
-            nextDecision.get(), "adaptiveSelection", evaluatedConfigurations.size(), remainingConfigurations);
+            nextDecision.get(), "adaptiveSelection", evaluatedConfigurations.size(), candidateCount);
 
     var latestQueue = executionRepository.get(namespace, queue.getMetadata().getName());
     for (Scenario scenario : scenariosToAppend) {

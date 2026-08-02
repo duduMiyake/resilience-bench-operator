@@ -67,19 +67,19 @@ Defaults:
 - `seed`: `42`
 - `sampleRate`: `0.5`, quando `sampleRate` e `maxScenarios` nao sao informados
 
-Exemplo: se existem 100 cenarios e `sampleRate: 0.25`, entram 25 cenarios na fila. Se tambem existir `maxScenarios: 10`, entram 10.
+Exemplo: se existem 100 configuracoes e `sampleRate: 0.25`, entram 25 configuracoes na selecao. Cada uma gera todos os seus scenarios operacionais obrigatorios. Se tambem existir `maxConfigurations: 10`, entram 10 configuracoes.
 
 A escolha nao muda entre execucoes iguais, porque o embaralhamento usa uma seed deterministica.
 
 ## k-NN adaptive
 
-`knnAdaptive` e uma estrategia adaptativa baseada nos k vizinhos mais proximos. Ela usa a ideia de que cenarios com configuracoes parecidas tendem a ter resultados parecidos.
+`knnAdaptive` e uma estrategia adaptativa baseada nos k vizinhos mais proximos. Ela usa a ideia de que configuracoes de resiliencia parecidas tendem a ter resultados agregados parecidos.
 
 O fluxo e:
 
-1. escolhe `initialSamples` iniciais usando amostragem espalhada pelo espaco de configuracoes;
-2. executa esses cenarios e coleta os scores reais;
-3. para cada cenario ainda nao executado, calcula a distancia ate os cenarios ja avaliados;
+1. escolhe `initialSamples` configuracoes iniciais usando amostragem espalhada pelo espaco de configuracoes;
+2. executa todos os scenarios operacionais dessas configuracoes e agrega seus scores reais;
+3. para cada configuracao ainda nao avaliada, calcula a distancia ate as configuracoes ja avaliadas;
 4. pega os `neighbors` avaliados mais proximos;
 5. estima o score do candidato pela media ponderada dos scores reais desses vizinhos;
 6. soma um bonus de exploracao;
@@ -143,8 +143,8 @@ Quanto menor a distancia, mais parecida a configuracao avaliada e com a candidat
 
 O k-NN usa dois tipos de score:
 
-- `score real`: score de um cenario que ja foi executado;
-- `score previsto`: estimativa de score para um candidato que ainda nao foi executado.
+- `score real`: score agregado de uma configuracao cujos scenarios operacionais foram concluidos;
+- `score previsto`: estimativa de score para uma configuracao candidata ainda nao avaliada.
 
 O `score real` vem das metricas do resultado e segue o `objective` do benchmark. Por exemplo:
 
@@ -269,7 +269,7 @@ As estrategias continuam escolhendo configuracoes da mesma forma, mesmo quando `
 
 Isso preserva a avaliacao honesta das heuristicas: elas nao consultam resultados de configuracoes ainda nao escolhidas.
 
-Com cache habilitado, a rodada tambem registra um `trace.json` no diretorio da run. O trace usa `schemaVersion: 2` e registra decisoes por configuracao, eventos de conclusao de scenarios, resultados agregados por configuracao e metadata especifica da heuristica. Para `knnAdaptive`, essa metadata inclui `predictedScore`, `uncertainty`, `explorationBonus`, `selectionScore` e `nearestNeighbors`, calculados pela estrategia no momento real da selecao.
+Toda rodada de estrategia heuristica registra um `trace.json`, mesmo quando o cache esta desabilitado. O trace usa `schemaVersion: 2` e registra decisoes por configuracao, eventos de conclusao de scenarios, resultados agregados por configuracao e metadata especifica da heuristica. Para `knnAdaptive`, essa metadata inclui `predictedScore`, `uncertainty`, `explorationBonus`, `selectionScore` e `nearestNeighbors`, calculados pela estrategia no momento real da selecao.
 
 Exemplo de configuracao:
 
@@ -291,4 +291,4 @@ spec:
 
 `randomSampling` escolhe uma amostra fixa e reprodutivel.
 
-`knnAdaptive` escolhe uma amostra inicial espalhada e depois prioriza cenarios parecidos com os melhores resultados ja observados, com um bonus configuravel para exploracao.
+`knnAdaptive` escolhe uma amostra inicial espalhada e depois prioriza configuracoes com melhor score previsto, com um bonus configuravel para exploracao.

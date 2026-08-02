@@ -21,6 +21,7 @@ import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.queue.ExecutionQueue;
 import io.resiliencebench.resources.scenario.Scenario;
 import io.resiliencebench.resources.selection.ScenarioSelectionStrategySelector;
+import io.resiliencebench.resources.selection.ScenarioSelectionSupport;
 import io.resiliencebench.resources.selection.configuration.ScenarioConfigurationIndex;
 import io.resiliencebench.resources.workload.Workload;
 import io.resiliencebench.support.CustomResourceRepository;
@@ -119,13 +120,19 @@ public class BenchmarkController implements Reconciler<Benchmark> {
   private void recordInitialSelections(Benchmark benchmark, ExecutionQueue queue, SelectionResult selectionResult) {
     var phase = initialPhase(benchmark);
     var heuristic = ResultStoragePathFactory.strategyType(benchmark);
+    var totalConfigurations = selectionResult.allConfigurations().totalConfigurations();
+    var initialSamples = selectionResult.selectedConfigurations().totalConfigurations();
+    var maxEvaluations = scenarioSelectionStrategySelector.selectAdaptive(benchmark).isPresent()
+            ? ScenarioSelectionSupport.evaluationBudget(
+                    totalConfigurations, benchmark)
+            : initialSamples;
+    heuristicTraceWriter.recordRunStarted(
+            benchmark, queue, totalConfigurations, initialSamples, maxEvaluations);
     var decisions = selectionResult.selectedConfigurations().keys().stream()
             .map(configuration -> ConfigurationSelectionDecision.of(configuration, heuristic))
             .toList();
-    var remainingConfigurations = Math.max(0,
-            selectionResult.allConfigurations().totalConfigurations() - selectionResult.selectedConfigurations().totalConfigurations());
     heuristicTraceWriter.recordSelectedConfigurations(benchmark, queue, selectionResult.allConfigurations(), decisions,
-            phase, 0, remainingConfigurations);
+            phase, 0, totalConfigurations);
   }
 
   private void logStrategySelection(Benchmark benchmark, int totalScenarios, int totalConfigurations,

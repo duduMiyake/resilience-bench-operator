@@ -32,7 +32,7 @@ public final class ScenarioSelectionSupport {
     return evaluationBudget(configurationIndex.totalConfigurations(), benchmark);
   }
 
-  private static int evaluationBudget(int totalCandidates, Benchmark benchmark) {
+  public static int evaluationBudget(int totalCandidates, Benchmark benchmark) {
     ScenarioSelectionStrategySpec strategy = benchmark.getSpec().getStrategy();
     Integer maxEvaluations = strategy.getMaxConfigurations() != null
             ? strategy.getMaxConfigurations()
