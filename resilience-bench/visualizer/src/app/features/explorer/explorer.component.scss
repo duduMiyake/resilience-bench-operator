@@ -1,0 +1,128 @@
+:host {
+  display: block;
+}
+
+.explorer-shell {
+  min-height: 100vh;
+}
+
+.run-header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem max(1rem, calc((100vw - 1440px) / 2));
+  border-bottom: 1px solid var(--rb-border);
+  background: rgba(255, 255, 255, 0.97);
+}
+
+.run-identity,
+.header-actions,
+.run-meta {
+  display: flex;
+  align-items: center;
+}
+
+.run-identity {
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.brand-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 6px;
+  background: #087f5b;
+  color: white;
+}
+
+.benchmark-name {
+  display: block;
+  overflow: hidden;
+  color: var(--rb-ink);
+  font-size: 1rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-meta {
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+  color: var(--rb-muted);
+  font-size: 0.72rem;
+}
+
+.run-meta .mono {
+  overflow-wrap: anywhere;
+}
+
+.header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.explorer-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: min(1440px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+  gap: 1rem;
+}
+
+.chart-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+  gap: 1rem;
+}
+
+.explorer-content > *,
+.chart-grid > * {
+  min-width: 0;
+}
+
+.chart-grid.legacy {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1050px) {
+  .run-header {
+    position: static;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .explorer-content {
+    width: min(calc(100% - 1rem), 1440px);
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .header-actions > * {
+    width: 100%;
+  }
+}

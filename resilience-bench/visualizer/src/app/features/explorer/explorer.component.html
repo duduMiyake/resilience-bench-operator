@@ -1,0 +1,69 @@
+<div class="explorer-shell">
+  <header class="run-header">
+    <div class="run-identity">
+      <div class="brand-mark" aria-hidden="true"><i class="pi pi-chart-scatter"></i></div>
+      <div>
+        <span class="benchmark-name">{{ run().benchmark }}</span>
+        <div class="run-meta">
+          <p-tag
+            [value]="strategyLabel()"
+            [severity]="run().kind === 'heuristic' ? 'success' : 'secondary'"
+          />
+          <span class="mono">{{ run().runId }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      @if (showWorkloadFilter()) {
+        <p-select
+          [options]="workloadOptions()"
+          optionLabel="label"
+          optionValue="value"
+          [ngModel]="state.workloadUsers()"
+          (ngModelChange)="state.workloadUsers.set($event)"
+          ariaLabel="Filtrar por usu&aacute;rios"
+        />
+      }
+      @if (showFaultFilter()) {
+        <p-select
+          [options]="faultOptions()"
+          optionLabel="label"
+          optionValue="value"
+          [ngModel]="state.faultPercentage()"
+          (ngModelChange)="state.faultPercentage.set($event)"
+          ariaLabel="Filtrar por porcentagem de falha"
+        />
+      }
+      <p-button
+        label="Carregar outra"
+        icon="pi pi-folder-open"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="loadAnother.emit()"
+      />
+    </div>
+  </header>
+
+  <main class="explorer-content">
+    @for (warning of run().warnings; track warning) {
+      <p-message severity="info">{{ warning }}</p-message>
+    }
+
+    <app-summary-cards [run]="run()" />
+
+    <div class="chart-grid" [class.legacy]="run().kind === 'legacy-exhaustive'">
+      <app-result-space />
+      @if (run().kind === 'heuristic') {
+        <app-search-progress />
+      }
+    </div>
+
+    @if (run().kind === 'heuristic') {
+      <app-decision-timeline />
+      <app-decision-details />
+    } @else {
+      <app-legacy-results [results]="state.visibleResults()" />
+    }
+  </main>
+</div>

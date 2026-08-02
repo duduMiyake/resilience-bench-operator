@@ -1,0 +1,38 @@
+{
+  "name": "visualizer",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test --watch=false"
+  },
+  "private": true,
+  "packageManager": "npm@11.12.1",
+  "dependencies": {
+    "@angular/animations": "21.2.19",
+    "@angular/cdk": "21.2.14",
+    "@angular/common": "21.2.19",
+    "@angular/compiler": "21.2.19",
+    "@angular/core": "21.2.19",
+    "@angular/forms": "21.2.19",
+    "@angular/platform-browser": "21.2.19",
+    "@angular/router": "21.2.19",
+    "@primeng/themes": "21.0.4",
+    "chart.js": "^4.5.1",
+    "primeicons": "^8.0.0",
+    "primeng": "21.1.9",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "21.2.19",
+    "@angular/cli": "21.2.19",
+    "@angular/compiler-cli": "21.2.19",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "5.9.3",
+    "vitest": "^4.0.8"
+  }
+}

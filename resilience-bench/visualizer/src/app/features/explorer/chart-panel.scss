@@ -1,0 +1,89 @@
+.chart-panel {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--rb-border);
+  border-radius: 6px;
+  background: var(--rb-surface);
+}
+
+.panel-heading {
+  display: flex;
+  min-height: 48px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.panel-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--rb-muted);
+  font-size: 0.8rem;
+}
+
+.chart-frame {
+  position: relative;
+  width: 100%;
+  height: 360px;
+}
+
+.chart-frame.compact {
+  height: 290px;
+}
+
+.legend,
+.phase-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  color: var(--rb-muted);
+  font-size: 0.75rem;
+}
+
+.legend span,
+.phase-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.legend i,
+.phase-summary i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.reference {
+  background: #98a2b3;
+}
+
+.visited,
+.adaptive {
+  background: #087f5b;
+}
+
+.selected {
+  background: #c2410c;
+}
+
+.initial {
+  background: #2563a5;
+}
+
+@media (max-width: 640px) {
+  .panel-heading {
+    flex-direction: column;
+  }
+
+  .legend,
+  .phase-summary {
+    justify-content: flex-start;
+  }
+
+  .chart-frame {
+    height: 320px;
+  }
+}

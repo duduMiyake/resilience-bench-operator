@@ -1,0 +1,180 @@
+<section class="details-panel">
+  <h2 class="section-heading">Decision Details</h2>
+
+  @if (state.selectedDecision(); as decision) {
+    <div class="decision-title">
+      <div>
+        <span class="decision-index">Decis&atilde;o {{ decision.decision }}</span>
+        <h3>{{ decision.configuration.summary }}</h3>
+      </div>
+      <p-tag
+        [value]="decision.selectionMode === 'INITIAL_BATCH' ? 'Inicial' : 'Adaptativa'"
+        [severity]="decision.selectionMode === 'INITIAL_BATCH' ? 'info' : 'success'"
+      />
+    </div>
+
+    <dl class="fact-grid">
+      <div>
+        <dt>Fase</dt>
+        <dd>{{ decision.phase }}</dd>
+      </div>
+      <div>
+        <dt>Modo</dt>
+        <dd>{{ decision.selectionMode }}</dd>
+      </div>
+      <div>
+        <dt>Hash</dt>
+        <dd class="mono" [title]="decision.configuration.hash">
+          {{ shortHash(decision.configuration.hash) }}
+        </dd>
+      </div>
+      <div>
+        <dt>Candidatas</dt>
+        <dd>{{ value(decision.candidateCount) }}</dd>
+      </div>
+      <div>
+        <dt>Restantes</dt>
+        <dd>{{ value(decision.remainingConfigurations) }}</dd>
+      </div>
+      <div>
+        <dt>Avaliadas antes</dt>
+        <dd>{{ value(decision.evaluatedConfigurations) }}</dd>
+      </div>
+      <div>
+        <dt>Score observado</dt>
+        <dd>
+          {{ value(decision.aggregatedResult?.currentScore ?? decision.aggregatedResult?.score) }}
+        </dd>
+      </div>
+      <div>
+        <dt>Melhor score</dt>
+        <dd>{{ value(decision.aggregatedResult?.bestScoreSoFar) }}</dd>
+      </div>
+    </dl>
+
+    <div class="details-section">
+      <h3>Metadados de sele&ccedil;&atilde;o</h3>
+      <div class="metadata-grid">
+        @for (key of knownMetadataKeys; track key) {
+          <div>
+            <span>{{ key }}</span>
+            <strong>{{ metadataValue(key) }}</strong>
+          </div>
+        }
+        @for (entry of genericMetadata(); track entry.key) {
+          <div>
+            <span>{{ entry.key }}</span>
+            <strong>{{ entry.value }}</strong>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="details-section">
+      <h3>Configura&ccedil;&atilde;o</h3>
+      @if (decision.configuration.connectors.length) {
+        @for (
+          connector of decision.configuration.connectors;
+          track connector.name + connector.source + connector.destination
+        ) {
+          <div class="connector-row">
+            <div class="connector-route">
+              <strong>{{ connector.name }}</strong>
+              <span
+                >{{ connector.source }} <i class="pi pi-arrow-right"></i>
+                {{ connector.destination }}</span
+              >
+              <p-tag [value]="connector.strategy" severity="secondary" />
+            </div>
+            @if (connector.parameters.length) {
+              <div class="parameter-list">
+                @for (parameter of connector.parameters; track parameter.path) {
+                  <span
+                    ><b>{{ parameter.path }}</b
+                    >{{ parameter.value }}</span
+                  >
+                }
+              </div>
+            }
+          </div>
+        }
+      } @else {
+        <p class="inline-empty">
+          Nenhum conector foi informado para esta configura&ccedil;&atilde;o.
+        </p>
+      }
+    </div>
+
+    <div class="details-section">
+      <h3>Vizinhos mais pr&oacute;ximos</h3>
+      @if (decision.nearestNeighbors.length) {
+        <p-table
+          [value]="decision.nearestNeighbors"
+          [scrollable]="true"
+          styleClass="p-datatable-sm"
+        >
+          <ng-template #header>
+            <tr>
+              <th>Configura&ccedil;&atilde;o</th>
+              <th>Dist&acirc;ncia</th>
+              <th>Score real</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-neighbor>
+            <tr>
+              <td>
+                <span>{{ neighbor.configurationSummary || '-' }}</span>
+                <small class="mono">{{ shortHash(neighbor.configurationHash) }}</small>
+              </td>
+              <td>{{ value(neighbor.distance) }}</td>
+              <td>{{ value(neighbor.realScore) }}</td>
+            </tr>
+          </ng-template>
+        </p-table>
+      } @else {
+        <p class="inline-empty">Sem vizinhos registrados nesta decis&atilde;o.</p>
+      }
+    </div>
+
+    <div class="details-section">
+      <h3>Execu&ccedil;&otilde;es</h3>
+      @if (decision.executions.length) {
+        <p-table [value]="decision.executions" [scrollable]="true" styleClass="p-datatable-sm">
+          <ng-template #header>
+            <tr>
+              <th>Cen&aacute;rio</th>
+              <th>Contexto</th>
+              <th>Origem</th>
+              <th>Score</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-execution>
+            <tr>
+              <td>
+                <span>{{ execution.scenario }}</span>
+                <small class="mono">{{ shortHash(execution.scenarioHash) }}</small>
+              </td>
+              <td>
+                {{ value(execution.workloadUsers) }} VUs ? {{ value(execution.faultPercentage) }}%
+              </td>
+              <td>
+                <p-tag
+                  [value]="execution.source"
+                  [severity]="executionSeverity(execution.source)"
+                />
+              </td>
+              <td>{{ value(execution.resultScore) }}</td>
+            </tr>
+          </ng-template>
+        </p-table>
+      } @else {
+        <p class="inline-empty">
+          Esta configura&ccedil;&atilde;o ainda n&atilde;o possui execu&ccedil;&otilde;es
+          registradas.
+        </p>
+      }
+    </div>
+  } @else {
+    <div class="empty-state">Selecione uma decis&atilde;o nos gr&aacute;ficos ou na timeline.</div>
+  }
+</section>

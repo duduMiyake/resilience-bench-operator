@@ -13,6 +13,7 @@ Start here when changing or running the project:
 - [docs/README.md](docs/README.md): documentation index.
 - [docs/heuristicas-de-selecao.md](docs/heuristicas-de-selecao.md): scenario selection strategies and adaptive heuristic behavior.
 - [docs/resultados-e-cache.md](docs/resultados-e-cache.md): result files, S3 storage and planned cache/replay behavior.
+- [docs/visualizer.md](docs/visualizer.md): local Angular visualizer for heuristic traces and result files.
 - [POSSIBILIDADES_HEURISTICAS.md](POSSIBILIDADES_HEURISTICAS.md): backlog of possible heuristic and evaluation improvements.
 
 ## Architecture
@@ -69,6 +70,10 @@ kubectl apply -k ./samples/overlays/hipstershop
 ```
 
 For a full local kind setup, see [LOCAL_RUN.md](LOCAL_RUN.md).
+
+## Visualizer
+
+The client-side run visualizer lives in `resilience-bench/visualizer`. Install it independently with `npm ci`, then use `npm start`, `npm test`, or `npm run build` from that directory. See the [Visualizer README](resilience-bench/visualizer/README.md) for separate Windows and WSL instructions.
 
 ## License
 

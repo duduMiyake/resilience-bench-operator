@@ -1,0 +1,75 @@
+<main class="loader-shell">
+  <header class="loader-heading">
+    <div class="product-mark" aria-hidden="true"><i class="pi pi-chart-scatter"></i></div>
+    <div>
+      <p class="eyebrow">ResilienceBench</p>
+      <h1>Heuristic Run Visualizer</h1>
+      <p>
+        Abra os artefatos locais de uma rodada para explorar o espa&ccedil;o de resultados e as
+        decis&otilde;es da heur&iacute;stica.
+      </p>
+    </div>
+  </header>
+
+  <p-card styleClass="loader-card">
+    <div class="file-grid">
+      <section class="file-field">
+        <div class="file-copy">
+          <span class="field-label">Trace</span>
+          <span class="field-hint">Obrigat&oacute;rio &middot; schema v2 ou exhaustive legado</span>
+        </div>
+        <p-fileupload
+          mode="basic"
+          accept=".json,application/json"
+          [auto]="false"
+          [multiple]="false"
+          chooseLabel="Selecionar trace.json"
+          chooseIcon="pi pi-file"
+          (onSelect)="selectTrace($event)"
+        />
+        @if (traceFile(); as file) {
+          <span class="selected-file"><i class="pi pi-check-circle"></i>{{ file.name }}</span>
+        }
+      </section>
+
+      <section class="file-field">
+        <div class="file-copy">
+          <span class="field-label">Resultados</span>
+          <span class="field-hint"
+            >Opcional &middot; amplia m&eacute;tricas e pontos de refer&ecirc;ncia</span
+          >
+        </div>
+        <p-fileupload
+          mode="basic"
+          accept=".json,application/json"
+          [auto]="false"
+          [multiple]="false"
+          chooseLabel="Selecionar results.json"
+          chooseIcon="pi pi-database"
+          severity="secondary"
+          (onSelect)="selectResults($event)"
+        />
+        @if (resultsFile(); as file) {
+          <span class="selected-file"><i class="pi pi-check-circle"></i>{{ file.name }}</span>
+        }
+      </section>
+    </div>
+
+    @if (error(); as message) {
+      <p-message severity="error" styleClass="loader-message">{{ message }}</p-message>
+    }
+
+    <div class="loader-actions">
+      <p-button
+        label="Abrir rodada"
+        icon="pi pi-arrow-right"
+        iconPos="right"
+        [loading]="loading()"
+        [disabled]="!traceFile()"
+        (onClick)="openRun()"
+      />
+    </div>
+  </p-card>
+
+  <p class="privacy-note"><i class="pi pi-lock"></i>Os arquivos permanecem neste navegador.</p>
+</main>
