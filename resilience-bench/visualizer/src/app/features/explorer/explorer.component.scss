@@ -126,3 +126,43 @@
     width: 100%;
   }
 }
+
+
+.context-label {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--rb-border);
+  border-radius: 6px;
+  background: #f8fafb;
+  color: var(--rb-muted);
+  font-size: 0.78rem;
+}
+
+.read-help {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+.help-panel {
+  position: absolute;
+  z-index: 10;
+  top: 2.35rem;
+  left: 0;
+  width: min(520px, calc(100vw - 2rem));
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--rb-border);
+  border-radius: 6px;
+  background: var(--rb-surface);
+  box-shadow: 0 12px 28px rgba(16, 24, 40, 0.14);
+}
+
+.help-panel p {
+  margin: 0.3rem 0;
+  color: var(--rb-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.help-panel b {
+  color: var(--rb-ink);
+}

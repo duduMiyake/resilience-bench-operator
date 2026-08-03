@@ -4,7 +4,7 @@
 }
 
 .loader-shell {
-  width: min(840px, calc(100% - 2rem));
+  width: min(1120px, calc(100% - 2rem));
   margin: 0 auto;
   padding: clamp(3rem, 10vh, 7rem) 0 2rem;
 }
@@ -53,7 +53,7 @@ h1 {
 
 .file-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -117,13 +117,15 @@ h1 {
   margin: 1rem 0 0;
 }
 
+@media (max-width: 900px) {
+  .file-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .loader-shell {
     padding-top: 2rem;
-  }
-
-  .file-grid {
-    grid-template-columns: 1fr;
   }
 
   .loader-heading {

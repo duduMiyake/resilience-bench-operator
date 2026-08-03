@@ -5,47 +5,39 @@
       <div>
         <span class="benchmark-name">{{ run().benchmark }}</span>
         <div class="run-meta">
-          <p-tag
-            [value]="strategyLabel()"
-            [severity]="run().kind === 'heuristic' ? 'success' : 'secondary'"
-          />
+          <p-tag [value]="strategyLabel()" [severity]="run().kind === 'heuristic' ? 'success' : 'secondary'" />
           <span class="mono">{{ run().runId }}</span>
         </div>
       </div>
     </div>
 
     <div class="header-actions">
+      @if (compactContext(); as label) {
+        <span class="context-label">{{ label }}</span>
+      }
       @if (showWorkloadFilter()) {
-        <p-select
-          [options]="workloadOptions()"
-          optionLabel="label"
-          optionValue="value"
-          [ngModel]="state.workloadUsers()"
-          (ngModelChange)="state.workloadUsers.set($event)"
-          ariaLabel="Filtrar por usu&aacute;rios"
-        />
+        <p-select [options]="workloadOptions()" optionLabel="label" optionValue="value" [ngModel]="state.workloadUsers()" (ngModelChange)="state.workloadUsers.set($event)" ariaLabel="Filter by workload" />
       }
       @if (showFaultFilter()) {
-        <p-select
-          [options]="faultOptions()"
-          optionLabel="label"
-          optionValue="value"
-          [ngModel]="state.faultPercentage()"
-          (ngModelChange)="state.faultPercentage.set($event)"
-          ariaLabel="Filtrar por porcentagem de falha"
-        />
+        <p-select [options]="faultOptions()" optionLabel="label" optionValue="value" [ngModel]="state.faultPercentage()" (ngModelChange)="state.faultPercentage.set($event)" ariaLabel="Filter by fault rate" />
       }
-      <p-button
-        label="Carregar outra"
-        icon="pi pi-folder-open"
-        severity="secondary"
-        [outlined]="true"
-        (onClick)="loadAnother.emit()"
-      />
+      <p-button label="Load Another" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="loadAnother.emit()" />
     </div>
   </header>
 
   <main class="explorer-content">
+    <section class="read-help">
+      <p-button icon="pi pi-info-circle" label="How to read this view" severity="secondary" [text]="true" (onClick)="showHelp.set(!showHelp())" />
+      @if (showHelp()) {
+        <div class="help-panel">
+          <p><b>Result Space</b> shows where evaluated configurations lie in the performance/reliability result space.</p>
+          <p><b>Search Progress</b> shows how observed and best scores evolved as configurations were evaluated.</p>
+          <p><b>Decision Timeline</b> shows the order in which configurations were selected.</p>
+          <p><b>Decision Details</b> explains why the selected configuration was chosen.</p>
+        </div>
+      }
+    </section>
+
     @for (warning of run().warnings; track warning) {
       <p-message severity="info">{{ warning }}</p-message>
     }

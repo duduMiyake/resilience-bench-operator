@@ -7,6 +7,9 @@ export class ExplorerStateService {
   readonly selectedDecisionNumber = signal<number | null>(null);
   readonly workloadUsers = signal<number | null>(null);
   readonly faultPercentage = signal<number | null>(null);
+  readonly isPlaying = signal(false);
+
+  private playbackTimer: ReturnType<typeof setInterval> | null = null;
 
   readonly selectedDecision = computed<NormalizedDecision | undefined>(() => {
     const decisionNumber = this.selectedDecisionNumber();
@@ -23,19 +26,15 @@ export class ExplorerStateService {
     return run ? run.referenceResults.filter((result) => this.matchesResult(result)) : [];
   });
 
-  readonly visibleDecisions = computed(() => {
-    const run = this.run();
-    if (!run) {
-      return [];
-    }
-    return run.decisions.filter((decision) => {
-      const contexts =
-        decision.joinedResults.length > 0 ? decision.joinedResults : decision.expectedScenarios;
-      return contexts.length === 0 || contexts.some((context) => this.matchesContext(context));
-    });
+  readonly visibleDecisions = computed(() => this.run()?.decisions ?? []);
+
+  readonly selectedDecisionIndex = computed(() => {
+    const selected = this.selectedDecisionNumber();
+    return this.visibleDecisions().findIndex((decision) => decision.decision === selected);
   });
 
   setRun(run: NormalizedRun): void {
+    this.stopPlayback();
     this.run.set(run);
     this.workloadUsers.set(null);
     this.faultPercentage.set(null);
@@ -43,6 +42,7 @@ export class ExplorerStateService {
   }
 
   clear(): void {
+    this.stopPlayback();
     this.run.set(null);
     this.selectedDecisionNumber.set(null);
     this.workloadUsers.set(null);
@@ -50,15 +50,58 @@ export class ExplorerStateService {
   }
 
   selectDecision(decision: number): void {
+    this.stopPlayback();
     this.selectedDecisionNumber.set(decision);
   }
 
   selectPrevious(): void {
+    this.stopPlayback();
     this.moveSelection(-1);
   }
 
   selectNext(): void {
+    this.stopPlayback();
     this.moveSelection(1);
+  }
+
+  play(): void {
+    if (this.isPlaying() || this.visibleDecisions().length <= 1) {
+      return;
+    }
+    if (this.selectedDecisionIndex() === this.visibleDecisions().length - 1) {
+      this.selectedDecisionNumber.set(this.visibleDecisions()[0]?.decision ?? null);
+    }
+    this.isPlaying.set(true);
+    this.playbackTimer = setInterval(() => this.advancePlayback(), 1200);
+  }
+
+  pause(): void {
+    this.stopPlayback();
+  }
+
+  togglePlayback(): void {
+    this.isPlaying() ? this.pause() : this.play();
+  }
+
+  private advancePlayback(): void {
+    const decisions = this.visibleDecisions();
+    const currentIndex = this.selectedDecisionIndex();
+    if (currentIndex < 0 || currentIndex >= decisions.length - 1) {
+      this.stopPlayback();
+      return;
+    }
+    this.selectedDecisionNumber.set(decisions[currentIndex + 1].decision);
+    if (currentIndex + 1 >= decisions.length - 1) {
+      this.stopPlayback();
+    }
+  }
+
+  private stopPlayback(): void {
+    if (this.playbackTimer) {
+      clearInterval(this.playbackTimer);
+      this.playbackTimer = null;
+    }
+    this.isPlaying.set(false);
   }
 
   private moveSelection(offset: number): void {
@@ -66,9 +109,7 @@ export class ExplorerStateService {
     if (decisions.length === 0) {
       return;
     }
-    const currentIndex = decisions.findIndex(
-      (decision) => decision.decision === this.selectedDecisionNumber(),
-    );
+    const currentIndex = this.selectedDecisionIndex();
     const nextIndex = Math.min(decisions.length - 1, Math.max(0, currentIndex + offset));
     this.selectedDecisionNumber.set(decisions[nextIndex].decision);
   }

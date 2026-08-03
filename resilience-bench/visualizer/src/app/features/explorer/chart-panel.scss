@@ -69,6 +69,11 @@
   background: #c2410c;
 }
 
+.new-best {
+  background: #f59e0b;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
 .initial {
   background: #2563a5;
 }
@@ -86,4 +91,36 @@
   .chart-frame {
     height: 320px;
   }
+}
+
+
+.better-x,
+.better-y,
+.preferred-zone {
+  position: absolute;
+  z-index: 1;
+  padding: 0.18rem 0.35rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--rb-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.better-x {
+  right: 1.2rem;
+  bottom: 0.2rem;
+}
+
+.better-y {
+  left: 0.15rem;
+  top: 0.6rem;
+}
+
+.preferred-zone {
+  right: 1.2rem;
+  bottom: 2rem;
+  color: #475467;
+  font-weight: 600;
 }

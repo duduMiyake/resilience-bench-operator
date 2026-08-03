@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { MessageModule } from 'primeng/message';
@@ -41,26 +41,38 @@ export class ExplorerComponent {
   readonly run = input.required<NormalizedRun>();
   readonly loadAnother = output<void>();
   readonly state = inject(ExplorerStateService);
+  readonly showHelp = signal(false);
+
+  readonly workloadValues = computed(() => distinctNumbers(this.run().contexts.map((context) => context.workloadUsers)));
+  readonly faultValues = computed(() => distinctNumbers(this.run().contexts.map((context) => context.faultPercentage)));
 
   readonly workloadOptions = computed<FilterOption[]>(() => [
-    { label: 'Todos os workloads', value: null },
-    ...distinctNumbers(this.run().contexts.map((context) => context.workloadUsers)).map(
-      (value) => ({ label: `${value} VUs`, value }),
-    ),
+    { label: 'All workloads', value: null },
+    ...this.workloadValues().map((value) => ({ label: `${value} users`, value })),
   ]);
 
   readonly faultOptions = computed<FilterOption[]>(() => [
-    { label: 'Todas as falhas', value: null },
-    ...distinctNumbers(this.run().contexts.map((context) => context.faultPercentage)).map(
-      (value) => ({ label: `${value}% falha`, value }),
-    ),
+    { label: 'All fault rates', value: null },
+    ...this.faultValues().map((value) => ({ label: `${value}% fault`, value })),
   ]);
 
-  readonly showWorkloadFilter = computed(() => this.workloadOptions().length > 2);
-  readonly showFaultFilter = computed(() => this.faultOptions().length > 2);
+  readonly showWorkloadFilter = computed(() => this.workloadValues().length > 1);
+  readonly showFaultFilter = computed(() => this.faultValues().length > 1);
+
+  readonly compactContext = computed(() => {
+    if (this.showWorkloadFilter() || this.showFaultFilter()) {
+      return undefined;
+    }
+    const users = this.workloadValues()[0];
+    const fault = this.faultValues()[0];
+    if (users === undefined && fault === undefined) {
+      return 'Operational Context: unavailable';
+    }
+    return `Operational Context: ${users ?? '-'} users - ${fault ?? '-'}% fault`;
+  });
 
   strategyLabel(): string {
-    return this.run().kind === 'legacy-exhaustive' ? 'Exhaustive legado' : this.run().strategy;
+    return this.run().kind === 'legacy-exhaustive' ? 'Legacy Exhaustive' : this.run().strategy;
   }
 }
 

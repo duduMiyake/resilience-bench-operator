@@ -21,7 +21,8 @@ export class RunLoaderComponent {
   private readonly messages = inject(MessageService);
 
   readonly traceFile = signal<LoadedJsonFile | null>(null);
-  readonly resultsFile = signal<LoadedJsonFile | null>(null);
+  readonly runResultsFile = signal<LoadedJsonFile | null>(null);
+  readonly referenceResultsFile = signal<LoadedJsonFile | null>(null);
   readonly error = signal<string | null>(null);
   readonly loading = signal(false);
 
@@ -29,31 +30,37 @@ export class RunLoaderComponent {
     await this.readSelection(event, 'trace', true);
   }
 
-  async selectResults(event: FileSelectEvent): Promise<void> {
-    await this.readSelection(event, 'results', false);
+  async selectRunResults(event: FileSelectEvent): Promise<void> {
+    await this.readSelection(event, 'runResults', false);
+  }
+
+  async selectReferenceResults(event: FileSelectEvent): Promise<void> {
+    await this.readSelection(event, 'referenceResults', false);
   }
 
   openRun(): void {
     const trace = this.traceFile();
     if (!trace) {
-      this.error.set('Selecione um trace.json para abrir a rodada.');
+      this.error.set('Select a trace.json file to open the run.');
       return;
     }
 
     this.loading.set(true);
     this.error.set(null);
     try {
-      const run = this.normalizer.normalize(trace.value, this.resultsFile()?.value);
+      const run = this.normalizer.normalize(
+        trace.value,
+        this.runResultsFile()?.value,
+        this.referenceResultsFile()?.value,
+      );
       this.state.setRun(run);
       this.messages.add({
         severity: 'success',
-        summary: 'Rodada carregada',
+        summary: 'Run loaded',
         detail: `${run.benchmark} / ${run.strategy}`,
       });
     } catch (error) {
-      this.error.set(
-        error instanceof Error ? error.message : 'NÃ£o foi possÃ­vel abrir os arquivos.',
-      );
+      this.error.set(error instanceof Error ? error.message : 'The selected files could not be opened.');
     } finally {
       this.loading.set(false);
     }
@@ -61,18 +68,18 @@ export class RunLoaderComponent {
 
   private async readSelection(
     event: FileSelectEvent,
-    target: 'trace' | 'results',
+    target: 'trace' | 'runResults' | 'referenceResults',
     required: boolean,
   ): Promise<void> {
     const file = event.files[0];
     if (!file) {
       if (required) {
-        this.error.set('Nenhum arquivo foi selecionado.');
+        this.error.set('No file was selected.');
       }
       return;
     }
     if (!file.name.toLowerCase().endsWith('.json')) {
-      this.error.set(`${file.name} nÃ£o Ã© um arquivo JSON.`);
+      this.error.set(`${file.name} is not a JSON file.`);
       return;
     }
 
@@ -83,15 +90,15 @@ export class RunLoaderComponent {
       };
       if (target === 'trace') {
         this.traceFile.set(loaded);
+      } else if (target === 'runResults') {
+        this.runResultsFile.set(loaded);
       } else {
-        this.resultsFile.set(loaded);
+        this.referenceResultsFile.set(loaded);
       }
       this.error.set(null);
     } catch (error) {
       this.error.set(
-        error instanceof VisualizerParseError
-          ? error.message
-          : `NÃ£o foi possÃ­vel ler ${file.name}.`,
+        error instanceof VisualizerParseError ? error.message : `Could not read ${file.name}.`,
       );
     }
   }

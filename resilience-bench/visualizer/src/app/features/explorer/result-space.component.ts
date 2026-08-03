@@ -7,6 +7,8 @@ import { ExplorerStateService } from '../../core/services/explorer-state.service
 interface ResultPoint extends Point {
   scenario: string;
   decision?: number;
+  observedScore?: number;
+  improvedBest?: boolean;
 }
 
 interface ChartSelectEvent {
@@ -20,30 +22,25 @@ interface ChartSelectEvent {
     <section class="chart-panel">
       <div class="panel-heading">
         <div>
-          <h2 class="section-heading">Espa\u00e7o de resultados</h2>
-          <p>Cada ponto combina taxa de sucesso do checkout e p95 da dura&ccedil;&atilde;o.</p>
+          <h2 class="section-heading">Result Space</h2>
+          <p>Checkout success versus p95 latency for the selected operational context.</p>
         </div>
-        <div class="legend" aria-label="Legenda">
-          <span><i class="reference"></i>Refer&ecirc;ncia</span>
-          <span><i class="visited"></i>Visitado</span>
-          <span><i class="selected"></i>Selecionado</span>
+        <div class="legend" aria-label="Legend">
+          <span><i class="reference"></i>Reference Space</span>
+          <span><i class="visited"></i>Evaluated by Heuristic</span>
+          <span><i class="selected"></i>Selected Decision</span>
+          <span><i class="new-best"></i>New Best</span>
         </div>
       </div>
       @if (hasPoints()) {
         <div class="chart-frame">
-          <p-chart
-            type="scatter"
-            [data]="data()"
-            [options]="options"
-            height="100%"
-            ariaLabel="Espa&ccedil;o de resultados"
-            (onDataSelect)="selectPoint($event)"
-          />
+          <span class="better-x">Better -&gt;</span>
+          <span class="better-y">Better down</span>
+          <span class="preferred-zone">Preferred region</span>
+          <p-chart type="scatter" [data]="data()" [options]="options" height="100%" ariaLabel="Result Space" (onDataSelect)="selectPoint($event)" />
         </div>
       } @else {
-        <div class="empty-state">
-          N&atilde;o h&aacute; m&eacute;tricas de sucesso e p95 para este contexto.
-        </div>
+        <div class="empty-state">No checkout success and p95 latency metrics are available for this context.</div>
       }
     </section>
   `,
@@ -55,29 +52,27 @@ export class ResultSpaceComponent {
 
   readonly data = computed<ChartData<'scatter', ResultPoint[]>>(() => {
     const selectedDecision = this.state.selectedDecisionNumber();
-    const references = this.toPoints(this.state.visibleReferenceResults());
-    const visitedResults = this.state
-      .visibleResults()
-      .filter(
-        (result) =>
-          result.joinedDecision !== undefined && result.joinedDecision !== selectedDecision,
-      );
-    const selectedResults = this.state
-      .visibleResults()
-      .filter((result) => result.joinedDecision === selectedDecision);
+    const decisionByNumber = new Map(this.state.visibleDecisions().map((decision) => [decision.decision, decision]));
+    const visibleResults = this.state.visibleResults();
+    const visitedResults = visibleResults.filter((result) => result.joinedDecision !== undefined && result.joinedDecision !== selectedDecision);
+    const selectedResults = visibleResults.filter((result) => result.joinedDecision === selectedDecision);
+    const newBestResults = visibleResults.filter((result) => {
+      const decision = result.joinedDecision === undefined ? undefined : decisionByNumber.get(result.joinedDecision);
+      return Boolean(decision?.aggregatedResult?.improvedBest) && result.joinedDecision !== selectedDecision;
+    });
 
     return {
       datasets: [
         {
-          label: 'Refer\u00eancia exhaustive',
-          data: references,
-          backgroundColor: '#98a2b3',
-          borderColor: '#667085',
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          label: 'Reference Space',
+          data: this.toPoints(this.state.visibleReferenceResults()),
+          backgroundColor: 'rgba(152, 162, 179, 0.42)',
+          borderColor: 'rgba(102, 112, 133, 0.55)',
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
         {
-          label: 'Configura\u00e7\u00f5es visitadas',
+          label: 'Evaluated by Heuristic',
           data: this.toPoints(visitedResults),
           backgroundColor: '#087f5b',
           borderColor: '#065f46',
@@ -85,20 +80,27 @@ export class ResultSpaceComponent {
           pointHoverRadius: 7,
         },
         {
-          label: 'Decis\u00e3o selecionada',
+          label: 'New Best',
+          data: this.toPoints(newBestResults),
+          backgroundColor: '#f59e0b',
+          borderColor: '#92400e',
+          pointRadius: 7,
+          pointHoverRadius: 8,
+          pointStyle: 'triangle',
+        },
+        {
+          label: 'Selected Decision',
           data: this.toPoints(selectedResults),
           backgroundColor: '#c2410c',
           borderColor: '#7c2d12',
-          pointRadius: 7,
-          pointHoverRadius: 8,
+          pointRadius: 8,
+          pointHoverRadius: 9,
         },
       ],
     };
   });
 
-  readonly hasPoints = computed(() =>
-    this.data().datasets.some((dataset) => dataset.data.length > 0),
-  );
+  readonly hasPoints = computed(() => this.data().datasets.some((dataset) => dataset.data.length > 0));
 
   readonly options: ChartOptions<'scatter'> = {
     responsive: true,
@@ -112,25 +114,25 @@ export class ResultSpaceComponent {
         callbacks: {
           label: (context) => {
             const point = context.raw as ResultPoint;
-            return [
-              point.scenario,
-              `Sucesso: ${formatMetric(point.x ?? 0)}`,
-              `p95: ${formatMetric(point.y ?? 0)} s`,
-              point.decision ? `Decis\u00e3o: ${point.decision}` : 'Refer\u00eancia',
+            const lines = [
+              point.decision ? `Decision #${point.decision}` : 'Reference configuration',
+              `Success Rate: ${formatPercent(point.x ?? 0)}`,
+              `p95: ${formatSeconds(point.y ?? 0)} s`,
             ];
+            if (point.observedScore !== undefined) {
+              lines.push(`Observed Score: ${formatNumber(point.observedScore)}`);
+            }
+            if (point.improvedBest) {
+              lines.push('New best found');
+            }
+            return lines;
           },
         },
       },
     },
     scales: {
-      x: {
-        title: { display: true, text: 'Taxa de sucesso do checkout' },
-        grid: { color: '#eaecf0' },
-      },
-      y: {
-        title: { display: true, text: 'p95 da dura\u00e7\u00e3o da itera\u00e7\u00e3o (s)' },
-        grid: { color: '#eaecf0' },
-      },
+      x: { title: { display: true, text: 'Checkout Success Rate' }, grid: { color: '#eaecf0' } },
+      y: { title: { display: true, text: 'p95 Iteration Duration (s)' }, grid: { color: '#eaecf0' } },
     },
   };
 
@@ -146,20 +148,31 @@ export class ResultSpaceComponent {
   }
 
   private toPoints(results: NormalizedResult[]): ResultPoint[] {
+    const decisionByNumber = new Map(this.state.visibleDecisions().map((decision) => [decision.decision, decision]));
     return results
-      .filter(
-        (result) =>
-          result.checkoutSuccessRate !== undefined && result.iterationDurationP95 !== undefined,
-      )
-      .map((result) => ({
-        x: result.checkoutSuccessRate!,
-        y: result.iterationDurationP95!,
-        scenario: result.scenario,
-        decision: result.joinedDecision,
-      }));
+      .filter((result) => result.checkoutSuccessRate !== undefined && result.iterationDurationP95 !== undefined)
+      .map((result) => {
+        const decision = result.joinedDecision === undefined ? undefined : decisionByNumber.get(result.joinedDecision);
+        return {
+          x: result.checkoutSuccessRate!,
+          y: result.iterationDurationP95!,
+          scenario: result.scenario,
+          decision: result.joinedDecision,
+          observedScore: decision?.aggregatedResult?.currentScore ?? decision?.aggregatedResult?.score,
+          improvedBest: decision?.aggregatedResult?.improvedBest,
+        };
+      });
   }
 }
 
-function formatMetric(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(value);
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(value);
+}
+
+function formatPercent(value: number): string {
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value * 100)}%`;
+}
+
+function formatSeconds(value: number): string {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 }

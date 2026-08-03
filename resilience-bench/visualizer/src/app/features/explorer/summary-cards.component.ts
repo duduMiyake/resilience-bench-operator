@@ -4,7 +4,7 @@ import { NormalizedRun } from '../../core/models/visualizer.models';
 @Component({
   selector: 'app-summary-cards',
   template: `
-    <section class="summary-grid" aria-label="Resumo da rodada">
+    <section class="summary-grid" aria-label="Run summary">
       @for (item of items(); track item.label) {
         <article class="summary-item">
           <span>{{ item.label }}</span>
@@ -80,24 +80,24 @@ export class SummaryCardsComponent {
     const run = this.run();
     const explored = percentage(run.totalConfigurationsSelected, run.totalConfigurationSpaceSize);
     return [
-      { label: 'Espa\u00e7o de busca', value: format(run.totalConfigurationSpaceSize) },
+      { label: 'Search Space', value: format(run.totalConfigurationSpaceSize) },
       {
-        label: 'Configura\u00e7\u00f5es avaliadas',
+        label: 'Evaluated Configurations',
         value: format(run.totalConfigurationsEvaluated),
       },
       {
-        label: 'Explorado',
+        label: 'Explored',
         value: explored,
         detail: valuePair(run.totalConfigurationsSelected, run.totalConfigurationSpaceSize),
       },
-      { label: 'Cen\u00e1rios executados', value: format(run.totalScenariosExecuted) },
-      { label: 'Cache hits', value: format(run.totalCacheHits) },
+      { label: 'Executed Scenarios', value: format(run.totalScenariosExecuted) },
+      { label: 'Cache Hits', value: format(run.totalCacheHits) },
     ];
   });
 }
 
 function format(value?: number): string {
-  return value === undefined ? '-' : new Intl.NumberFormat('pt-BR').format(value);
+  return value === undefined ? '-' : new Intl.NumberFormat('en-US').format(value);
 }
 
 function percentage(selected?: number, total?: number): string {
@@ -109,5 +109,5 @@ function percentage(selected?: number, total?: number): string {
 function valuePair(selected?: number, total?: number): string | undefined {
   return selected === undefined || total === undefined
     ? undefined
-    : `${format(selected)} de ${format(total)}`;
+    : `${format(selected)} of ${format(total)}`;
 }

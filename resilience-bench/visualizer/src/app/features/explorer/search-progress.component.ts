@@ -14,27 +14,20 @@ interface ChartSelectEvent {
     <section class="chart-panel">
       <div class="panel-heading">
         <div>
-          <h2 class="section-heading">Progresso da busca</h2>
-          <p>Score observado por decis&atilde;o e melhor score encontrado at&eacute; o momento.</p>
+          <h2 class="section-heading">Search Progress</h2>
+          <p>Observed Score for each decision and Best Score So Far after that evaluation.</p>
         </div>
         <div class="phase-summary">
-          <span><i class="initial"></i>Inicial</span>
-          <span><i class="adaptive"></i>Adaptativa</span>
+          @if (initialRange(); as range) { <span><i class="initial"></i>Initial Sample {{ range }}</span> }
+          @if (adaptiveRange(); as range) { <span><i class="adaptive"></i>Adaptive Search {{ range }}</span> }
         </div>
       </div>
       @if (hasScores()) {
         <div class="chart-frame compact">
-          <p-chart
-            type="line"
-            [data]="data()"
-            [options]="options"
-            height="100%"
-            ariaLabel="Progresso da busca"
-            (onDataSelect)="selectPoint($event)"
-          />
+          <p-chart type="line" [data]="data()" [options]="options" height="100%" ariaLabel="Search Progress" (onDataSelect)="selectPoint($event)" />
         </div>
       } @else {
-        <div class="empty-state">O trace n&atilde;o cont&eacute;m scores avaliados.</div>
+        <div class="empty-state">The trace does not contain evaluated scores.</div>
       }
     </section>
   `,
@@ -43,8 +36,10 @@ interface ChartSelectEvent {
 })
 export class SearchProgressComponent {
   readonly state = inject(ExplorerStateService);
-
   readonly decisions = computed(() => this.state.visibleDecisions());
+
+  readonly initialRange = computed(() => rangeLabel(this.decisions().filter(isInitial)));
+  readonly adaptiveRange = computed(() => rangeLabel(this.decisions().filter((decision) => !isInitial(decision))));
 
   readonly data = computed<ChartData<'line'>>(() => {
     const decisions = this.decisions();
@@ -57,20 +52,16 @@ export class SearchProgressComponent {
 
     const datasets: ChartData<'line'>['datasets'] = [
       {
-        label: 'Amostra inicial',
-        data: decisions.map((decision, index) =>
-          decision.selectionMode === 'INITIAL_BATCH' ? score(index) : null,
-        ),
+        label: 'Observed Score - Initial Sample',
+        data: decisions.map((decision, index) => (isInitial(decision) ? score(index) : null)),
         borderColor: '#2563a5',
         backgroundColor: '#2563a5',
         pointRadius: 4,
         showLine: false,
       },
       {
-        label: 'Sele\u00e7\u00e3o adaptativa',
-        data: decisions.map((decision, index) =>
-          decision.selectionMode !== 'INITIAL_BATCH' ? score(index) : null,
-        ),
+        label: 'Observed Score - Adaptive Search',
+        data: decisions.map((decision, index) => (!isInitial(decision) ? score(index) : null)),
         borderColor: '#087f5b',
         backgroundColor: '#087f5b',
         pointRadius: 4,
@@ -80,7 +71,7 @@ export class SearchProgressComponent {
 
     if (decisions.some((decision) => decision.aggregatedResult?.bestScoreSoFar !== undefined)) {
       datasets.push({
-        label: 'Melhor score',
+        label: 'Best Score So Far',
         data: decisions.map((decision) => decision.aggregatedResult?.bestScoreSoFar ?? null),
         borderColor: '#c2410c',
         backgroundColor: '#c2410c',
@@ -92,10 +83,8 @@ export class SearchProgressComponent {
     }
 
     datasets.push({
-      label: 'Decis\u00e3o selecionada',
-      data: decisions.map((decision, index) =>
-        decision.decision === selected ? score(index) : null,
-      ),
+      label: 'Selected Decision',
+      data: decisions.map((decision, index) => (decision.decision === selected ? score(index) : null)),
       borderColor: '#7c2d12',
       backgroundColor: '#fff7ed',
       pointBorderWidth: 3,
@@ -108,9 +97,7 @@ export class SearchProgressComponent {
 
   readonly hasScores = computed(() =>
     this.decisions().some(
-      (decision) =>
-        decision.aggregatedResult?.score !== undefined ||
-        decision.aggregatedResult?.currentScore !== undefined,
+      (decision) => decision.aggregatedResult?.score !== undefined || decision.aggregatedResult?.currentScore !== undefined,
     ),
   );
 
@@ -120,26 +107,25 @@ export class SearchProgressComponent {
     animation: false,
     interaction: { mode: 'nearest', intersect: true },
     plugins: {
-      legend: {
-        display: true,
-        position: 'bottom',
-        labels: { usePointStyle: true, boxWidth: 8 },
-      },
+      legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
       tooltip: {
         callbacks: {
-          title: (items) => (items.length ? `Decis\u00e3o ${items[0].label}` : ''),
+          title: (items) => (items.length ? `Decision #${items[0].label}` : ''),
+          label: (item) => `${item.dataset.label}: ${formatScore(Number(item.raw))}`,
+          afterBody: (items) => {
+            const first = items[0];
+            const decision = first ? this.decisions()[first.dataIndex] : undefined;
+            if (!decision) {
+              return [];
+            }
+            return [`New Best: ${decision.aggregatedResult?.improvedBest ? 'Yes' : 'No'}`];
+          },
         },
       },
     },
     scales: {
-      x: {
-        title: { display: true, text: 'Decis\u00e3o' },
-        grid: { display: false },
-      },
-      y: {
-        title: { display: true, text: 'Score' },
-        grid: { color: '#eaecf0' },
-      },
+      x: { title: { display: true, text: 'Decision' }, grid: { display: false } },
+      y: { title: { display: true, text: 'Score' }, grid: { color: '#eaecf0' } },
     },
   };
 
@@ -150,4 +136,21 @@ export class SearchProgressComponent {
       this.state.selectDecision(decision.decision);
     }
   }
+}
+
+function isInitial(decision: { phase?: string; selectionMode?: string }): boolean {
+  return decision.selectionMode === 'INITIAL_BATCH' || decision.phase === 'initialSample' || decision.phase === 'initialSelection';
+}
+
+function rangeLabel(decisions: Array<{ decision: number }>): string | undefined {
+  if (!decisions.length) {
+    return undefined;
+  }
+  const first = decisions[0].decision;
+  const last = decisions[decisions.length - 1].decision;
+  return first === last ? `#${first}` : `#${first}-${last}`;
+}
+
+function formatScore(value: number): string {
+  return Number.isFinite(value) ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(value) : '-';
 }

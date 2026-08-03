@@ -1,6 +1,7 @@
 import { ExplorerStateService } from './explorer-state.service';
 import { RunNormalizerService } from './run-normalizer.service';
 import { VisualizerParseError } from '../models/visualizer.models';
+import { vi } from 'vitest';
 
 describe('RunNormalizerService', () => {
   const service = new RunNormalizerService();
@@ -70,7 +71,7 @@ describe('RunNormalizerService', () => {
     state.faultPercentage.set(50);
 
     expect(state.visibleResults().map((item) => item.scenario)).toEqual(['scenario-two']);
-    expect(state.visibleDecisions().map((item) => item.decision)).toEqual([2]);
+    expect(state.visibleDecisions().map((item) => item.decision)).toEqual([1, 2]);
   });
 
   it('creates a normalized model that does not depend on later raw mutations', () => {
@@ -118,8 +119,81 @@ describe('RunNormalizerService', () => {
     expect(run.events).toEqual([]);
     expect(run.results).toHaveLength(1);
     expect(run.results[0].iterationDurationP95).toBe(0.12);
-    expect(run.warnings[0]).toContain('legado');
+    expect(run.warnings[0]).toContain('Legacy exhaustive trace');
   });
+
+  it('keeps exhaustive reference data separate from heuristic run results', () => {
+    const run = service.normalize(
+      v2Trace(),
+      { results: [result('scenario-one', 'hash-one', 100, 25)] },
+      { results: [result('reference-only', 'reference-hash', 100, 25)] },
+    );
+
+    expect(run.results.map((item) => item.scenario)).toEqual(['scenario-one']);
+    expect(run.referenceResults.map((item) => item.scenario)).toEqual(['reference-only']);
+    expect(run.referenceResults[0].joinedDecision).toBeUndefined();
+  });
+
+  it('supports multiple operational contexts while keeping search progress decisions unfiltered', () => {
+    const run = service.normalize(v2Trace(), {
+      results: [
+        result('scenario-one', 'hash-one', 100, 25),
+        result('scenario-two', 'hash-two', 100, 50),
+        result('scenario-three', 'hash-three', 300, 25),
+        result('scenario-four', 'hash-four', 300, 50),
+      ],
+    });
+    const state = new ExplorerStateService();
+    state.setRun(run);
+
+    expect(run.contexts.map((context) => context.key)).toEqual(['100|25', '100|50', '300|25', '300|50']);
+
+    state.workloadUsers.set(300);
+    state.faultPercentage.set(50);
+
+    expect(state.visibleResults().map((item) => item.scenario)).toEqual(['scenario-four']);
+    expect(state.visibleDecisions().map((item) => item.decision)).toEqual([1, 2]);
+  });
+
+  it('normalizes mixed Cache Hit and Executed scenario sources', () => {
+    const trace = v2Trace();
+    const first = (trace['decisions'] as Array<Record<string, unknown>>)[0];
+    first['executions'] = [
+      { scenario: 'scenario-one', scenarioHash: 'hash-one', source: 'cacheHit', resultScore: 0.8 },
+      { scenario: 'scenario-two', scenarioHash: 'hash-two', source: 'executed', resultScore: 0.7 },
+    ];
+
+    const run = service.normalize(trace, {
+      results: [result('scenario-one', 'hash-one', 100, 25), result('scenario-two', 'hash-two', 300, 50)],
+    });
+
+    expect(run.decisions[0].executions.map((execution) => execution.source)).toEqual(['cacheHit', 'executed']);
+  });
+
+  it('playback advances, pauses, stops at the final decision, and manual selection pauses it', () => {
+    vi.useFakeTimers();
+    const state = new ExplorerStateService();
+    state.setRun(service.normalize(v2Trace()));
+
+    state.selectNext();
+    expect(state.selectedDecisionNumber()).toBe(2);
+    state.selectPrevious();
+    expect(state.selectedDecisionNumber()).toBe(1);
+
+    state.play();
+    expect(state.isPlaying()).toBe(true);
+    vi.advanceTimersByTime(1200);
+    expect(state.selectedDecisionNumber()).toBe(2);
+    expect(state.isPlaying()).toBe(false);
+
+    state.selectPrevious();
+    state.play();
+    state.selectDecision(2);
+    expect(state.isPlaying()).toBe(false);
+
+    vi.useRealTimers();
+  });
+
 });
 
 function v2Trace(): Record<string, unknown> {

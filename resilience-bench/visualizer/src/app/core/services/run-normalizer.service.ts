@@ -22,34 +22,39 @@ export class RunNormalizerService {
     try {
       return JSON.parse(text) as unknown;
     } catch {
-      throw new VisualizerParseError(`${label} não contém um JSON válido.`);
+      throw new VisualizerParseError(`${label} does not contain valid JSON.`);
     }
   }
 
-  normalize(traceValue: unknown, resultsValue?: unknown): NormalizedRun {
+  normalize(traceValue: unknown, runResultsValue?: unknown, referenceResultsValue?: unknown): NormalizedRun {
     const trace = asRecord(traceValue);
     if (!trace) {
-      throw new VisualizerParseError('O trace deve ser um objeto JSON.');
+      throw new VisualizerParseError('The trace must be a JSON object.');
     }
 
-    const results = this.normalizeResults(resultsValue);
+    const runResults = this.normalizeResults(runResultsValue);
+    const referenceResults = this.normalizeResults(referenceResultsValue);
     if (numberValue(trace['schemaVersion']) === 2) {
-      return this.normalizeV2(trace, results);
+      return this.normalizeV2(trace, runResults, referenceResults);
     }
 
     if (
       stringValue(trace['strategy']).toLowerCase() === 'exhaustive' &&
       Array.isArray(trace['steps'])
     ) {
-      return this.normalizeLegacy(trace, results);
+      return this.normalizeLegacy(trace, runResults.length > 0 ? runResults : referenceResults);
     }
 
     throw new VisualizerParseError(
-      'Formato de trace não reconhecido. Use schemaVersion 2 ou o formato exhaustive legado.',
+      'Unrecognized trace format. Use schemaVersion 2 or the legacy exhaustive format.',
     );
   }
 
-  private normalizeV2(trace: JsonRecord, results: NormalizedResult[]): NormalizedRun {
+  private normalizeV2(
+    trace: JsonRecord,
+    runResults: NormalizedResult[],
+    referenceResults: NormalizedResult[],
+  ): NormalizedRun {
     const decisions = arrayValue(trace['decisions'])
       .map(asRecord)
       .filter((value): value is JsonRecord => value !== undefined)
@@ -57,7 +62,7 @@ export class RunNormalizerService {
 
     const resultByHash = new Map<string, NormalizedResult>();
     const resultByName = new Map<string, NormalizedResult>();
-    for (const result of results) {
+    for (const result of runResults) {
       if (result.scenarioHash) {
         resultByHash.set(result.scenarioHash, result);
       }
@@ -97,20 +102,20 @@ export class RunNormalizerService {
     }
 
     const events = this.normalizeEvents(trace['events']);
-    const contexts = collectContexts(results, decisions);
+    const contexts = collectContexts([...runResults, ...referenceResults], decisions);
     const warnings: string[] = [];
-    if (results.length === 0) {
+    if (runResults.length === 0) {
       warnings.push(
-        'Nenhum results.json foi carregado; métricas por cenário podem não estar disponíveis.',
+        'No run results file was loaded; scenario-level metrics may be unavailable.',
       );
     }
 
     return {
       kind: 'heuristic',
       schemaVersion: 2,
-      benchmark: stringValue(trace['benchmark']) || 'benchmark desconhecido',
-      strategy: stringValue(trace['heuristic']) || 'heurística desconhecida',
-      runId: stringValue(trace['runId']) || 'run sem identificador',
+      benchmark: stringValue(trace['benchmark']) || 'unknown benchmark',
+      strategy: stringValue(trace['heuristic']) || 'unknown heuristic',
+      runId: stringValue(trace['runId']) || 'unnamed run',
       resultFile: optionalString(trace['resultFile']),
       startedAt: optionalString(trace['startedAt']),
       finishedAt: optionalString(trace['finishedAt']),
@@ -124,8 +129,8 @@ export class RunNormalizerService {
       totalCacheHits: optionalNumber(trace['totalCacheHits']),
       totalTraceInconsistencies: optionalNumber(trace['totalTraceInconsistencies']),
       decisions,
-      results,
-      referenceResults: results.filter((result) => result.joinedDecision === undefined),
+      results: runResults,
+      referenceResults,
       events,
       contexts,
       warnings,
@@ -149,9 +154,9 @@ export class RunNormalizerService {
       benchmark:
         stringValue(trace['benchmark']) ||
         firstDefined(normalizedResults.map((result) => result.benchmark)) ||
-        'benchmark desconhecido',
+        'unknown benchmark',
       strategy: 'exhaustive',
-      runId: stringValue(trace['runId']) || 'run legado',
+      runId: stringValue(trace['runId']) || 'legacy run',
       totalConfigurationSpaceSize:
         optionalNumber(trace['totalConfigurationSpaceSize']) ?? normalizedResults.length,
       totalConfigurationsSelected: undefined,
@@ -168,7 +173,7 @@ export class RunNormalizerService {
       events: [],
       contexts: collectContexts(normalizedResults, []),
       warnings: [
-        'Trace exhaustive legado: decisões heurísticas e metadados de seleção não estão disponíveis.',
+        'Legacy exhaustive trace: heuristic decisions and selection metadata are unavailable.',
       ],
     };
   }
@@ -220,7 +225,7 @@ export class RunNormalizerService {
           ? value
           : undefined;
     if (!rawResults) {
-      throw new VisualizerParseError('O results.json deve conter um array em "results".');
+      throw new VisualizerParseError('The results file must contain an array in "results".');
     }
     return rawResults
       .map(asRecord)
@@ -345,7 +350,7 @@ function normalizeResult(raw: JsonRecord): NormalizedResult {
   const metrics = asRecord(raw['metrics']) ?? raw;
   const fault = asRecord(raw['fault']) ?? {};
   return {
-    scenario: stringValue(raw['scenario']) || stringValue(raw['name']) || 'scenario sem nome',
+    scenario: stringValue(raw['scenario']) || stringValue(raw['name']) || 'unnamed scenario',
     scenarioHash: optionalString(raw['scenarioHash']),
     benchmark: optionalString(raw['benchmark']),
     resultSource: optionalString(raw['resultSource']) ?? optionalString(raw['source']),
@@ -382,7 +387,7 @@ function collectContexts(
       key,
       workloadUsers,
       faultPercentage,
-      label: `${workloadUsers ?? '-'} VUs · ${faultPercentage ?? '-'}% falha`,
+      label: `${workloadUsers ?? '-'} users - ${faultPercentage ?? '-'}% fault`,
     });
   };
   results.forEach((result) => add(result.workloadUsers, result.faultPercentage));
