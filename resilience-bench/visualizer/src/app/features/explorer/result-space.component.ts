@@ -20,8 +20,8 @@ interface ChartSelectEvent {
     <section class="chart-panel">
       <div class="panel-heading">
         <div>
-          <h2 class="section-heading">Result Space</h2>
-          <p>Sucesso do checkout versus p95 da dura&ccedil;&atilde;o da itera&ccedil;&atilde;o.</p>
+          <h2 class="section-heading">Espa\u00e7o de resultados</h2>
+          <p>Cada ponto combina taxa de sucesso do checkout e p95 da dura&ccedil;&atilde;o.</p>
         </div>
         <div class="legend" aria-label="Legenda">
           <span><i class="reference"></i>Refer&ecirc;ncia</span>
@@ -69,7 +69,7 @@ export class ResultSpaceComponent {
     return {
       datasets: [
         {
-          label: 'Refer\\u00eancia / exhaustive',
+          label: 'Refer\u00eancia exhaustive',
           data: references,
           backgroundColor: '#98a2b3',
           borderColor: '#667085',
@@ -77,7 +77,7 @@ export class ResultSpaceComponent {
           pointHoverRadius: 6,
         },
         {
-          label: 'Configura\\u00e7\\u00f5es visitadas',
+          label: 'Configura\u00e7\u00f5es visitadas',
           data: this.toPoints(visitedResults),
           backgroundColor: '#087f5b',
           borderColor: '#065f46',
@@ -85,7 +85,7 @@ export class ResultSpaceComponent {
           pointHoverRadius: 7,
         },
         {
-          label: 'Decis\\u00e3o selecionada',
+          label: 'Decis\u00e3o selecionada',
           data: this.toPoints(selectedResults),
           backgroundColor: '#c2410c',
           borderColor: '#7c2d12',
@@ -116,7 +116,7 @@ export class ResultSpaceComponent {
               point.scenario,
               `Sucesso: ${formatMetric(point.x ?? 0)}`,
               `p95: ${formatMetric(point.y ?? 0)} s`,
-              point.decision ? `Decis\\u00e3o: ${point.decision}` : 'Refer\\u00eancia',
+              point.decision ? `Decis\u00e3o: ${point.decision}` : 'Refer\u00eancia',
             ];
           },
         },
@@ -124,11 +124,11 @@ export class ResultSpaceComponent {
     },
     scales: {
       x: {
-        title: { display: true, text: 'checkout_success_rate' },
+        title: { display: true, text: 'Taxa de sucesso do checkout' },
         grid: { color: '#eaecf0' },
       },
       y: {
-        title: { display: true, text: 'iteration_duration_p95 (s)' },
+        title: { display: true, text: 'p95 da dura\u00e7\u00e3o da itera\u00e7\u00e3o (s)' },
         grid: { color: '#eaecf0' },
       },
     },

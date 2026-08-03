@@ -14,8 +14,8 @@ interface ChartSelectEvent {
     <section class="chart-panel">
       <div class="panel-heading">
         <div>
-          <h2 class="section-heading">Search Progress</h2>
-          <p>Score observado por decis&atilde;o e melhor score informado pelo trace.</p>
+          <h2 class="section-heading">Progresso da busca</h2>
+          <p>Score observado por decis&atilde;o e melhor score encontrado at&eacute; o momento.</p>
         </div>
         <div class="phase-summary">
           <span><i class="initial"></i>Inicial</span>
@@ -67,7 +67,7 @@ export class SearchProgressComponent {
         showLine: false,
       },
       {
-        label: 'Sele\\u00e7\\u00e3o adaptativa',
+        label: 'Sele\u00e7\u00e3o adaptativa',
         data: decisions.map((decision, index) =>
           decision.selectionMode !== 'INITIAL_BATCH' ? score(index) : null,
         ),
@@ -92,7 +92,7 @@ export class SearchProgressComponent {
     }
 
     datasets.push({
-      label: 'Decis\\u00e3o selecionada',
+      label: 'Decis\u00e3o selecionada',
       data: decisions.map((decision, index) =>
         decision.decision === selected ? score(index) : null,
       ),
@@ -127,13 +127,13 @@ export class SearchProgressComponent {
       },
       tooltip: {
         callbacks: {
-          title: (items) => (items.length ? `Decis\\u00e3o ${items[0].label}` : ''),
+          title: (items) => (items.length ? `Decis\u00e3o ${items[0].label}` : ''),
         },
       },
     },
     scales: {
       x: {
-        title: { display: true, text: 'Decis\\u00e3o' },
+        title: { display: true, text: 'Decis\u00e3o' },
         grid: { display: false },
       },
       y: {

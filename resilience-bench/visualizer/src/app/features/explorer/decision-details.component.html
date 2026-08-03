@@ -1,5 +1,5 @@
 <section class="details-panel">
-  <h2 class="section-heading">Decision Details</h2>
+  <h2 class="section-heading">Detalhes da decis&atilde;o</h2>
 
   @if (state.selectedDecision(); as decision) {
     <div class="decision-title">
@@ -16,11 +16,11 @@
     <dl class="fact-grid">
       <div>
         <dt>Fase</dt>
-        <dd>{{ decision.phase }}</dd>
+        <dd>{{ phaseLabel(decision.phase) }}</dd>
       </div>
       <div>
         <dt>Modo</dt>
-        <dd>{{ decision.selectionMode }}</dd>
+        <dd>{{ selectionModeLabel(decision.selectionMode) }}</dd>
       </div>
       <div>
         <dt>Hash</dt>
@@ -57,13 +57,13 @@
       <div class="metadata-grid">
         @for (key of knownMetadataKeys; track key) {
           <div>
-            <span>{{ key }}</span>
+            <span>{{ metadataLabel(key) }}</span>
             <strong>{{ metadataValue(key) }}</strong>
           </div>
         }
         @for (entry of genericMetadata(); track entry.key) {
           <div>
-            <span>{{ entry.key }}</span>
+            <span>{{ metadataLabel(entry.key) }}</span>
             <strong>{{ entry.value }}</strong>
           </div>
         }
@@ -84,13 +84,13 @@
                 >{{ connector.source }} <i class="pi pi-arrow-right"></i>
                 {{ connector.destination }}</span
               >
-              <p-tag [value]="connector.strategy" severity="secondary" />
+              <p-tag [value]="connectorStrategyLabel(connector.strategy)" severity="secondary" />
             </div>
             @if (connector.parameters.length) {
               <div class="parameter-list">
                 @for (parameter of connector.parameters; track parameter.path) {
                   <span
-                    ><b>{{ parameter.path }}</b
+                    ><b>{{ parameterLabel(parameter.path) }}</b
                     >{{ parameter.value }}</span
                   >
                 }
@@ -159,7 +159,7 @@
               </td>
               <td>
                 <p-tag
-                  [value]="execution.source"
+                  [value]="executionSourceLabel(execution.source)"
                   [severity]="executionSeverity(execution.source)"
                 />
               </td>

@@ -80,9 +80,9 @@ export class SummaryCardsComponent {
     const run = this.run();
     const explored = percentage(run.totalConfigurationsSelected, run.totalConfigurationSpaceSize);
     return [
-      { label: 'Espa\\u00e7o de busca', value: format(run.totalConfigurationSpaceSize) },
+      { label: 'Espa\u00e7o de busca', value: format(run.totalConfigurationSpaceSize) },
       {
-        label: 'Configura\\u00e7\\u00f5es avaliadas',
+        label: 'Configura\u00e7\u00f5es avaliadas',
         value: format(run.totalConfigurationsEvaluated),
       },
       {
@@ -90,7 +90,7 @@ export class SummaryCardsComponent {
         value: explored,
         detail: valuePair(run.totalConfigurationsSelected, run.totalConfigurationSpaceSize),
       },
-      { label: 'Cen\\u00e1rios executados', value: format(run.totalScenariosExecuted) },
+      { label: 'Cen\u00e1rios executados', value: format(run.totalScenariosExecuted) },
       { label: 'Cache hits', value: format(run.totalCacheHits) },
     ];
   });

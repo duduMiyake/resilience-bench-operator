@@ -52,7 +52,7 @@ export class RunLoaderComponent {
       });
     } catch (error) {
       this.error.set(
-        error instanceof Error ? error.message : 'N\\u00e3o foi poss\\u00edvel abrir os arquivos.',
+        error instanceof Error ? error.message : 'NÃ£o foi possÃ­vel abrir os arquivos.',
       );
     } finally {
       this.loading.set(false);
@@ -72,7 +72,7 @@ export class RunLoaderComponent {
       return;
     }
     if (!file.name.toLowerCase().endsWith('.json')) {
-      this.error.set(`${file.name} n\\u00e3o \\u00e9 um arquivo JSON.`);
+      this.error.set(`${file.name} nÃ£o Ã© um arquivo JSON.`);
       return;
     }
 
@@ -91,7 +91,7 @@ export class RunLoaderComponent {
       this.error.set(
         error instanceof VisualizerParseError
           ? error.message
-          : `N\\u00e3o foi poss\\u00edvel ler ${file.name}.`,
+          : `NÃ£o foi possÃ­vel ler ${file.name}.`,
       );
     }
   }

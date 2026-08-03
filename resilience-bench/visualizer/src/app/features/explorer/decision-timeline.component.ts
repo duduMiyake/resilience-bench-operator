@@ -9,7 +9,7 @@ import { ExplorerStateService } from '../../core/services/explorer-state.service
     <section class="timeline-panel">
       <div class="timeline-heading">
         <div>
-          <h2 class="section-heading">Decision Timeline</h2>
+          <h2 class="section-heading">Linha do tempo</h2>
           <p class="muted">{{ state.visibleDecisions().length }} decis&otilde;es neste contexto</p>
         </div>
         <div class="timeline-nav">
