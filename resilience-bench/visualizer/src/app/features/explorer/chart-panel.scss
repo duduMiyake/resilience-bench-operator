@@ -124,3 +124,25 @@
   color: #475467;
   font-weight: 600;
 }
+
+
+.panel-tools {
+  display: grid;
+  justify-items: end;
+  gap: 0.45rem;
+}
+
+.path-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--rb-muted);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .panel-tools {
+    justify-items: start;
+  }
+}

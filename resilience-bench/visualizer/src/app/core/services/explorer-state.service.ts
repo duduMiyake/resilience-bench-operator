@@ -1,6 +1,20 @@
 import { computed, Injectable, signal } from '@angular/core';
 import { NormalizedDecision, NormalizedResult, NormalizedRun } from '../models/visualizer.models';
 
+export interface BestFoundSummary {
+  decision: number;
+  score: number;
+}
+
+export interface SearchPathPoint {
+  decision: number;
+  x: number;
+  y: number;
+  phase: 'initial' | 'adaptive';
+  observedScore?: number;
+  improvedBest?: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ExplorerStateService {
   readonly run = signal<NormalizedRun | null>(null);
@@ -8,6 +22,7 @@ export class ExplorerStateService {
   readonly workloadUsers = signal<number | null>(null);
   readonly faultPercentage = signal<number | null>(null);
   readonly isPlaying = signal(false);
+  readonly showSearchPath = signal(false);
 
   private playbackTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -33,11 +48,61 @@ export class ExplorerStateService {
     return this.visibleDecisions().findIndex((decision) => decision.decision === selected);
   });
 
+  readonly bestFound = computed<BestFoundSummary | undefined>(() => {
+    const decisions = this.visibleDecisions();
+    let best: BestFoundSummary | undefined;
+    for (const decision of decisions) {
+      const observed = observedScore(decision);
+      if (observed === undefined) {
+        continue;
+      }
+      if (!best || observed > best.score) {
+        best = { decision: decision.decision, score: observed };
+      }
+    }
+    return best;
+  });
+
+  readonly searchPath = computed<SearchPathPoint[]>(() => {
+    const resultByDecision = new Map<number, NormalizedResult>();
+    for (const result of this.visibleResults()) {
+      if (
+        result.joinedDecision !== undefined &&
+        result.checkoutSuccessRate !== undefined &&
+        result.iterationDurationP95 !== undefined &&
+        !resultByDecision.has(result.joinedDecision)
+      ) {
+        resultByDecision.set(result.joinedDecision, result);
+      }
+    }
+
+    return this.visibleDecisions()
+      .slice()
+      .sort((left, right) => left.decision - right.decision)
+      .flatMap((decision) => {
+        const result = resultByDecision.get(decision.decision);
+        if (!result) {
+          return [];
+        }
+        return [
+          {
+            decision: decision.decision,
+            x: result.checkoutSuccessRate!,
+            y: result.iterationDurationP95!,
+            phase: isInitialDecision(decision) ? 'initial' : 'adaptive',
+            observedScore: observedScore(decision),
+            improvedBest: decision.aggregatedResult?.improvedBest,
+          },
+        ];
+      });
+  });
+
   setRun(run: NormalizedRun): void {
     this.stopPlayback();
     this.run.set(run);
     this.workloadUsers.set(null);
     this.faultPercentage.set(null);
+    this.showSearchPath.set(false);
     this.selectedDecisionNumber.set(run.decisions[0]?.decision ?? null);
   }
 
@@ -47,6 +112,7 @@ export class ExplorerStateService {
     this.selectedDecisionNumber.set(null);
     this.workloadUsers.set(null);
     this.faultPercentage.set(null);
+    this.showSearchPath.set(false);
   }
 
   selectDecision(decision: number): void {
@@ -62,6 +128,13 @@ export class ExplorerStateService {
   selectNext(): void {
     this.stopPlayback();
     this.moveSelection(1);
+  }
+
+  selectBestFound(): void {
+    const best = this.bestFound();
+    if (best) {
+      this.selectDecision(best.decision);
+    }
   }
 
   play(): void {
@@ -126,4 +199,12 @@ export class ExplorerStateService {
       (fault === null || context.faultPercentage === fault)
     );
   }
+}
+
+export function isInitialDecision(decision: { phase?: string; selectionMode?: string }): boolean {
+  return decision.selectionMode === 'INITIAL_BATCH' || decision.phase === 'initialSample' || decision.phase === 'initialSelection';
+}
+
+export function observedScore(decision: NormalizedDecision): number | undefined {
+  return decision.aggregatedResult?.currentScore ?? decision.aggregatedResult?.score;
 }

@@ -74,6 +74,10 @@ export class ExplorerComponent {
   strategyLabel(): string {
     return this.run().kind === 'legacy-exhaustive' ? 'Legacy Exhaustive' : this.run().strategy;
   }
+
+  formatScore(score: number): string {
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(score);
+  }
 }
 
 function distinctNumbers(values: Array<number | undefined>): number[] {

@@ -194,6 +194,93 @@ describe('RunNormalizerService', () => {
     vi.useRealTimers();
   });
 
+
+  it('Best Found identifies the best observed heuristic decision and ignores reference results', () => {
+    const trace = v2Trace();
+    const decisions = trace['decisions'] as Array<Record<string, unknown>>;
+    (decisions[1]['aggregatedResult'] as Record<string, unknown>)['score'] = 0.95;
+    (decisions[1]['aggregatedResult'] as Record<string, unknown>)['bestScoreSoFar'] = 0.95;
+    (decisions[1]['aggregatedResult'] as Record<string, unknown>)['improvedBest'] = true;
+
+    const run = service.normalize(
+      trace,
+      { results: [result('scenario-one', 'hash-one', 100, 25), result('scenario-two', 'hash-two', 300, 50)] },
+      { results: [highReferenceResult()] },
+    );
+    const state = new ExplorerStateService();
+    state.setRun(run);
+
+    expect(state.bestFound()).toEqual({ decision: 2, score: 0.95 });
+  });
+
+  it('View Decision selects the best decision and pauses playback', () => {
+    vi.useFakeTimers();
+    const trace = v2Trace();
+    const decisions = trace['decisions'] as Array<Record<string, unknown>>;
+    (decisions[1]['aggregatedResult'] as Record<string, unknown>)['score'] = 0.95;
+    const state = new ExplorerStateService();
+    state.setRun(service.normalize(trace));
+
+    state.play();
+    expect(state.isPlaying()).toBe(true);
+    state.selectBestFound();
+
+    expect(state.selectedDecisionNumber()).toBe(2);
+    expect(state.isPlaying()).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('Search Path follows decision order and only includes heuristic points in the active context', () => {
+    const run = service.normalize(v2Trace(), {
+      results: [
+        result('scenario-two', 'hash-two', 300, 50),
+        result('scenario-one', 'hash-one', 100, 25),
+      ],
+    });
+    const state = new ExplorerStateService();
+    state.setRun(run);
+
+    expect(state.searchPath().map((point) => point.decision)).toEqual([1, 2]);
+
+    state.workloadUsers.set(300);
+    state.faultPercentage.set(50);
+
+    expect(state.searchPath().map((point) => point.decision)).toEqual([2]);
+  });
+
+  it('Search Path skips decisions without a result in the selected context and never includes reference points', () => {
+    const run = service.normalize(
+      v2Trace(),
+      { results: [result('scenario-one', 'hash-one', 100, 25)] },
+      { results: [result('reference-only', 'reference-hash', 100, 25)] },
+    );
+    const state = new ExplorerStateService();
+    state.setRun(run);
+
+    expect(state.searchPath().map((point) => point.decision)).toEqual([1]);
+    expect(state.searchPath().some((point) => point.decision === undefined)).toBe(false);
+  });
+
+  it('global selected decision is shared by playback, manual selection, and best selection', () => {
+    vi.useFakeTimers();
+    const trace = v2Trace();
+    const decisions = trace['decisions'] as Array<Record<string, unknown>>;
+    (decisions[1]['aggregatedResult'] as Record<string, unknown>)['score'] = 0.95;
+    const state = new ExplorerStateService();
+    state.setRun(service.normalize(trace));
+
+    expect(state.selectedDecision()?.decision).toBe(1);
+    state.selectDecision(2);
+    expect(state.selectedDecision()?.decision).toBe(2);
+    state.play();
+    state.selectDecision(1);
+    expect(state.isPlaying()).toBe(false);
+    state.selectBestFound();
+    expect(state.selectedDecision()?.decision).toBe(2);
+
+    vi.useRealTimers();
+  });
+
 });
 
 function v2Trace(): Record<string, unknown> {
@@ -308,6 +395,23 @@ function result(
     fault_percentage: fault,
     checkout_success_rate: 0.91,
     iteration_duration_p95: 0.18,
+    connectors: [],
+  };
+}
+
+
+function highReferenceResult(): Record<string, unknown> {
+  return {
+    benchmark: 'hipstershop',
+    scenario: 'reference-best',
+    scenarioHash: 'reference-best-hash',
+    resultSource: 'executed',
+    workload_name: 'k6',
+    workload_users: 300,
+    fault_percentage: 50,
+    checkout_success_rate: 0.99,
+    iteration_duration_p95: 0.01,
+    metrics: { score: 0.99 },
     connectors: [],
   };
 }

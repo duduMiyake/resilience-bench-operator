@@ -12,8 +12,8 @@
 
     <section class="explanation-card">
       <h3>Why was this configuration selected?</h3>
-      @if (knnExplanation(decision); as explanation) {
-        <p>{{ explanation }}</p>
+      <p>{{ decisionExplanation(decision) }}</p>
+      @if (!isInitial(decision) && hasKnnFormula(decision)) {
         <div class="formula-row">
           <div><span title="{{ metadataTooltip('predictedScore') }}">Predicted Score</span><strong>{{ metadataValue('predictedScore') }}</strong></div>
           <b>+</b>
@@ -21,14 +21,8 @@
           <b>=</b>
           <div><span title="{{ metadataTooltip('selectionScore') }}">Selection Score</span><strong>{{ metadataValue('selectionScore') }}</strong></div>
         </div>
-      } @else {
-        <p>This trace does not include enough KNN metadata to explain the selection formula for this decision.</p>
       }
-      @if (decision.aggregatedResult?.improvedBest) {
-        <p class="best-message new">New best configuration found</p>
-      } @else {
-        <p class="best-message">Best known score remained {{ value(decision.aggregatedResult?.bestScoreSoFar) }}</p>
-      }
+      <p class="best-message" [class.new]="decision.aggregatedResult?.improvedBest">{{ bestStatus(decision) }}</p>
     </section>
 
     <section class="details-section">

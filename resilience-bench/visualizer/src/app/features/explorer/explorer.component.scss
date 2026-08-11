@@ -166,3 +166,38 @@
 .help-panel b {
   color: var(--rb-ink);
 }
+
+
+.best-found-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--rb-border);
+  border-radius: 6px;
+  background: var(--rb-surface);
+}
+
+.best-found-card div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.best-found-card span,
+.best-found-card small {
+  color: var(--rb-muted);
+  font-size: 0.76rem;
+}
+
+.best-found-card strong {
+  color: var(--rb-ink);
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .best-found-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { JsonRecord, NormalizedConnector, NormalizedDecision } from '../../core/models/visualizer.models';
-import { ExplorerStateService } from '../../core/services/explorer-state.service';
+import { ExplorerStateService, isInitialDecision, observedScore } from '../../core/services/explorer-state.service';
 
 @Component({
   selector: 'app-decision-details',
@@ -23,8 +23,19 @@ export class DecisionDetailsComponent {
       .map(([key, value]) => ({ key, label: this.metadataLabel(key), value: display(value) }));
   });
 
+  isInitial(decision: NormalizedDecision): boolean {
+    return isInitialDecision(decision);
+  }
+
   hasKnnFormula(decision: NormalizedDecision): boolean {
     return ['predictedScore', 'explorationBonus', 'selectionScore'].every((key) => typeof decision.metadata[key] === 'number');
+  }
+
+  decisionExplanation(decision: NormalizedDecision): string {
+    if (this.isInitial(decision)) {
+      return 'This configuration belongs to the initial sample. Initial configurations are selected before the adaptive KNN search begins, so predicted score, uncertainty, exploration bonus, and selection score are not used for this decision. The results from the initial sample provide the first observations for the adaptive search.';
+    }
+    return this.knnExplanation(decision) ?? 'This adaptive decision does not include enough KNN metadata to explain the selection formula.';
   }
 
   knnExplanation(decision: NormalizedDecision): string | undefined {
@@ -35,12 +46,19 @@ export class DecisionDetailsComponent {
     const uncertainty = display(decision.metadata['uncertainty']);
     const bonus = display(decision.metadata['explorationBonus']);
     const selection = display(decision.metadata['selectionScore']);
-    const observed = display(decision.aggregatedResult?.currentScore ?? decision.aggregatedResult?.score);
+    const observed = display(observedScore(decision));
     const best = display(decision.aggregatedResult?.bestScoreSoFar);
     const ending = decision.aggregatedResult?.improvedBest
-      ? `After evaluation, the observed score was ${observed}, creating a new best score of ${best}.`
-      : `After evaluation, the observed score was ${observed}. The best score known at that moment remained ${best}.`;
+      ? `After evaluation, the observed score was ${observed}. This became the new best configuration found so far with a best score of ${best}.`
+      : `After evaluation, the observed score was ${observed}. The best known score remained ${best}.`;
     return `The heuristic predicted a score of ${predicted} for this configuration. Because the configuration had an uncertainty of ${uncertainty}, an exploration bonus of ${bonus} was added. This produced a selection score of ${selection}, making it an attractive candidate for exploration. ${ending}`;
+  }
+
+  bestStatus(decision: NormalizedDecision): string {
+    if (decision.aggregatedResult?.improvedBest) {
+      return 'New best configuration found';
+    }
+    return `Best known score remained ${display(decision.aggregatedResult?.bestScoreSoFar)}`;
   }
 
   metadataValue(key: string): string {

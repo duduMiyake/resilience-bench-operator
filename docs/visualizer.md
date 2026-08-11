@@ -24,7 +24,7 @@ Run results and exhaustive reference results are intentionally kept separate. A 
 
 ## How To Read The Visualizer
 
-Start with the summary cards to understand the size of the search space and how much of it was evaluated. Then use Result Space to see where the evaluated configurations landed inside the broader reference space when one is provided. Use Search Progress to see when observed scores improved and how the best score evolved. The Decision Timeline shows the selection order, and Decision Details explains why the selected configuration was chosen before exposing raw technical data.
+Start with the summary cards to understand the size of the search space and how much of it was evaluated. Then use Best Found to jump to the best observed heuristic decision. Use Result Space to see where the evaluated configurations landed inside the broader reference space when one is provided. Enable Show Search Path to see the order in which the heuristic moved through the active operational context. Use Search Progress to see when observed scores improved and how the best score evolved. The Decision Timeline shows the selection order, and Decision Details explains why the selected configuration was chosen before exposing raw technical data.
 
 ## Summary Cards
 
@@ -38,6 +38,10 @@ The summary cards show:
 
 A run with zero executed scenarios and many cache hits is valid. It means the scenario results were retrieved from cache.
 
+## Best Found
+
+Best Found summarizes the best observed configuration evaluated by the heuristic run. It is based on observed decision results from the trace, not exhaustive reference points, predicted score, or selection score. The View Decision action selects that decision globally, which updates Result Space, Search Progress, Decision Timeline, and Decision Details.
+
 ## Result Space
 
 Result Space keeps the current metrics:
@@ -45,9 +49,13 @@ Result Space keeps the current metrics:
 - X axis: Checkout Success Rate, where higher is better
 - Y axis: p95 Iteration Duration (s), where lower is better
 
-The preferred direction is therefore toward the lower-right region. Reference points are shown with low emphasis, heuristic evaluations with stronger color, the selected decision with the strongest highlight, and new-best decisions with a separate marker.
+The preferred direction is therefore toward the lower-right region. Reference points are shown with low emphasis. Initial Sample and Adaptive Search points use different visual styles, the selected decision has a larger ringed marker, and new-best decisions use a separate marker.
 
 Operational Context filters affect Result Space so that workload and fault-rate combinations are not mixed in one scatter view.
+
+## Show Search Path
+
+Show Search Path connects evaluated heuristic configurations in the order selected by the heuristic for the active operational context. Reference-space configurations are not part of this path. If a decision has no result point for the current workload/fault filter, it is skipped safely instead of inventing coordinates.
 
 ## Operational Context
 
@@ -62,7 +70,7 @@ Search Progress shows:
 - Observed Score: the score obtained by evaluating the selected configuration
 - Best Score So Far: the best score known after that evaluation
 
-The chart visually separates Initial Sample decisions from Adaptive Search decisions using phase and selection mode from the trace.
+The chart visually separates Initial Sample decisions from Adaptive Search decisions using phase and selection mode from the trace. Initial Sample decisions provide the first observations used by the adaptive heuristic. Adaptive Search decisions are selected using information learned from previously evaluated configurations.
 
 ## Decision Timeline
 
@@ -84,7 +92,7 @@ For KNN Adaptive traces with metadata, Decision Details generates a deterministi
 - Best Score So Far
 - Improved Best
 
-The visual formula is:
+Selection Score is used by the heuristic to choose the candidate. Observed Score is the actual score measured after evaluation. Best Score is the best observed configuration score so far. The visual formula is:
 
 ```text
 Predicted Score + Exploration Bonus = Selection Score
@@ -121,3 +129,8 @@ Mixed cache and execution sources are supported in the same decision.
 ## Limitations
 
 The visualizer can only explain values present in the trace/results artifacts. More precise UX explanations would benefit from explicit units in the result schema, explicit objective direction metadata, and a trace-level declaration describing whether a results file is run data or reference data. The frontend now handles that last distinction through separate loader inputs without changing the backend schema.
+
+
+## Reference Space
+
+Reference Space is optional and visually secondary. It does not affect heuristic decision ordering, Best Found, Search Progress, or the search path. Its purpose is only to provide context for where the heuristic explored.

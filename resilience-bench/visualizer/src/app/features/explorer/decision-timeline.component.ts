@@ -22,8 +22,8 @@ import { ExplorerStateService } from '../../core/services/explorer-state.service
 
       @if (state.visibleDecisions().length) {
         <div class="phase-labels">
-          @if (initialRange(); as range) { <span>INITIAL SAMPLE - Decisions {{ range }}</span> }
-          @if (adaptiveRange(); as range) { <span>ADAPTIVE SEARCH - Decisions {{ range }}</span> }
+          @if (initialRange(); as range) { <span title="These configurations provide the first observations used by the adaptive heuristic.">INITIAL SAMPLE - Decisions {{ range }}</span> }
+          @if (adaptiveRange(); as range) { <span title="These configurations are selected using information learned from previously evaluated configurations.">ADAPTIVE SEARCH - Decisions {{ range }}</span> }
         </div>
         <div class="timeline-track" role="list" aria-label="Decisions">
           @for (decision of state.visibleDecisions(); track decision.decision) {

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { ChartData, ChartOptions } from 'chart.js';
 import { ChartModule } from 'primeng/chart';
-import { ExplorerStateService } from '../../core/services/explorer-state.service';
+import { ExplorerStateService, isInitialDecision } from '../../core/services/explorer-state.service';
 
 interface ChartSelectEvent {
   element: unknown;
@@ -87,8 +87,9 @@ export class SearchProgressComponent {
       data: decisions.map((decision, index) => (decision.decision === selected ? score(index) : null)),
       borderColor: '#7c2d12',
       backgroundColor: '#fff7ed',
-      pointBorderWidth: 3,
-      pointRadius: 7,
+      pointBorderColor: '#7c2d12',
+      pointBorderWidth: 4,
+      pointRadius: 9,
       showLine: false,
     });
 
@@ -111,14 +112,20 @@ export class SearchProgressComponent {
       tooltip: {
         callbacks: {
           title: (items) => (items.length ? `Decision #${items[0].label}` : ''),
-          label: (item) => `${item.dataset.label}: ${formatScore(Number(item.raw))}`,
+          label: () => '',
           afterBody: (items) => {
             const first = items[0];
             const decision = first ? this.decisions()[first.dataIndex] : undefined;
             if (!decision) {
               return [];
             }
-            return [`New Best: ${decision.aggregatedResult?.improvedBest ? 'Yes' : 'No'}`];
+            const observed = decision.aggregatedResult?.currentScore ?? decision.aggregatedResult?.score;
+            return [
+              isInitialDecision(decision) ? 'Initial Sample' : 'Adaptive Search',
+              `Observed Score: ${formatScore(observed)}`,
+              `Best Score So Far: ${formatScore(decision.aggregatedResult?.bestScoreSoFar)}`,
+              `New Best: ${decision.aggregatedResult?.improvedBest ? 'Yes' : 'No'}`,
+            ];
           },
         },
       },
@@ -139,7 +146,7 @@ export class SearchProgressComponent {
 }
 
 function isInitial(decision: { phase?: string; selectionMode?: string }): boolean {
-  return decision.selectionMode === 'INITIAL_BATCH' || decision.phase === 'initialSample' || decision.phase === 'initialSelection';
+  return isInitialDecision(decision);
 }
 
 function rangeLabel(decisions: Array<{ decision: number }>): string | undefined {
@@ -151,6 +158,8 @@ function rangeLabel(decisions: Array<{ decision: number }>): string | undefined 
   return first === last ? `#${first}` : `#${first}-${last}`;
 }
 
-function formatScore(value: number): string {
-  return Number.isFinite(value) ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(value) : '-';
+function formatScore(value: number | null | undefined): string {
+  return value !== null && value !== undefined && Number.isFinite(value)
+    ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(value)
+    : '-';
 }

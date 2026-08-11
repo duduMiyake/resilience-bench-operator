@@ -44,6 +44,18 @@
 
     <app-summary-cards [run]="run()" />
 
+
+    @if (run().kind === 'heuristic' && state.bestFound(); as best) {
+      <section class="best-found-card" aria-label="Best Found">
+        <div>
+          <span>Best Found</span>
+          <strong>Score {{ formatScore(best.score) }}</strong>
+          <small>Decision #{{ best.decision }}</small>
+        </div>
+        <p-button label="View Decision" icon="pi pi-arrow-right" iconPos="right" severity="secondary" [outlined]="true" (onClick)="state.selectBestFound()" />
+      </section>
+    }
+
     <div class="chart-grid" [class.legacy]="run().kind === 'legacy-exhaustive'">
       <app-result-space />
       @if (run().kind === 'heuristic') {
