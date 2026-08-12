@@ -18,7 +18,7 @@ The loader separates the run artifacts by purpose:
 
 - `Trace` is required. It contains the heuristic decisions, search order, phases, KNN metadata, expected scenarios, and execution records.
 - `Run Results` is optional but recommended. It contains detailed metrics from the heuristic run and is joined to decisions by `scenarioHash` first, then scenario name.
-- `Exhaustive Reference` is optional. It contains full or broader result-space data used only as visual context.
+- `Exhaustive Reference` is optional. It contains scenario-level exhaustive data used as visual context and, when compatible, as the quantitative reference.
 
 Run results and exhaustive reference results are intentionally kept separate. A result that does not match a heuristic decision is no longer treated as exhaustive reference automatically.
 
@@ -38,9 +38,44 @@ The summary cards show:
 
 A run with zero executed scenarios and many cache hits is valid. It means the scenario results were retrieved from cache.
 
-## Best Found
+## Search Outcome
 
-Best Found summarizes the best observed configuration evaluated by the heuristic run. It is based on observed decision results from the trace, not exhaustive reference points, predicted score, or selection score. The View Decision action selects that decision globally, which updates Result Space, Search Progress, Decision Timeline, and Decision Details.
+Search Outcome summarizes the best observed configuration evaluated by the heuristic run, the decision where it was first found, evaluated/total configurations, explored ratio, and search-space reduction. The official heuristic score is always the trace-provided `decision.aggregatedResult.score`; exhaustive points, predicted scores, selection scores, and scenario metrics never replace it. This version explicitly treats higher scores as better (`maximize`). The View Decision action selects the heuristic best globally.
+
+The ratios are:
+
+```text
+explored ratio = evaluated configurations / total configurations
+search-space reduction = 1 - explored ratio
+```
+
+## Quantitative Exhaustive Reference
+
+The frontend reproduces the Operator aggregation for the external Exhaustive Reference. Scenarios are grouped by normalized resilience connector configuration, independently of workload and fault context. Connector/object keys and arrays are normalized and connectors are sorted, matching `ResilienceConfigurationKey`; grouping never depends on array position.
+
+For every configuration, each numeric scenario-result field is averaged across its operational contexts, matching `ConfigurationResultAggregator`. The default Operator objective is then applied exactly:
+
+```text
+configuration score = mean(checkout_success_rate | successRate)
+                    - mean(iteration_duration_p95 | p95Latency)
+```
+
+The trace does not currently carry `ObjectiveSpec`. Therefore the reference comparison uses this exact default objective and checks configurations shared by the heuristic trace and exhaustive data. If a recomputed shared score differs from `aggregatedResult.score`, the aggregate reference is marked incompatible instead of silently presenting divergent values.
+
+For a compatible reference under maximize semantics:
+
+```text
+absolute gap = reference best - heuristic best
+relative gap = (reference best - heuristic best) / reference best * 100
+```
+
+Relative gap is unavailable when the reference best is zero. Quality milestones are fixed at 90%, 95%, and 99%; each reports the first heuristic decision whose best score so far reaches `reference best * threshold`, or `Not reached`.
+
+Aggregate comparison is valid only when every exhaustive configuration covers every workload × fault context expected by the heuristic run. Incomplete coverage suppresses Reference Best, gaps, and quality thresholds.
+
+## By Operational Context
+
+The secondary table is limited to contexts present in both datasets and remains available even when aggregate reference coverage is incomplete. It compares the best Checkout Success Rate (higher is better) and best p95 Iteration Duration (lower is better) independently. It does not synthesize a context score.
 
 ## Result Space
 
@@ -133,4 +168,4 @@ The visualizer can only explain values present in the trace/results artifacts. M
 
 ## Reference Space
 
-Reference Space is optional and visually secondary. It does not affect heuristic decision ordering, Best Found, Search Progress, or the search path. Its purpose is only to provide context for where the heuristic explored.
+Reference Space is optional and visually secondary. It does not affect heuristic decision ordering, heuristic Best Found, Search Progress, or the search path. Compatible reference data additionally feeds Search Outcome and By Operational Context as documented above.

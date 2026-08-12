@@ -52,7 +52,7 @@ export class ExplorerStateService {
     const decisions = this.visibleDecisions();
     let best: BestFoundSummary | undefined;
     for (const decision of decisions) {
-      const observed = observedScore(decision);
+      const observed = decision.aggregatedResult?.score;
       if (observed === undefined) {
         continue;
       }
@@ -206,5 +206,5 @@ export function isInitialDecision(decision: { phase?: string; selectionMode?: st
 }
 
 export function observedScore(decision: NormalizedDecision): number | undefined {
-  return decision.aggregatedResult?.currentScore ?? decision.aggregatedResult?.score;
+  return decision.aggregatedResult?.score ?? decision.aggregatedResult?.currentScore;
 }

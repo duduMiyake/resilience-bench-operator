@@ -114,6 +114,7 @@ export interface NormalizedResult {
   workloadUsers?: number;
   faultProvider?: string;
   faultPercentage?: number;
+  faultServices: string[];
   connectors: unknown[];
   checkoutSuccessRate?: number;
   iterationDurationP95?: number;

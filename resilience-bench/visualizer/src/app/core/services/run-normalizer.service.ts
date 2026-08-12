@@ -347,7 +347,7 @@ function normalizeNeighbor(raw: JsonRecord): NearestNeighbor {
 }
 
 function normalizeResult(raw: JsonRecord): NormalizedResult {
-  const metrics = asRecord(raw['metrics']) ?? raw;
+  const metrics = { ...raw, ...(asRecord(raw['metrics']) ?? {}) };
   const fault = asRecord(raw['fault']) ?? {};
   return {
     scenario: stringValue(raw['scenario']) || stringValue(raw['name']) || 'unnamed scenario',
@@ -364,6 +364,7 @@ function normalizeResult(raw: JsonRecord): NormalizedResult {
       optionalNumber(raw['fault_percentage']) ??
       optionalNumber(fault['percentage']) ??
       optionalNumber(raw['percentage']),
+    faultServices: arrayValue(raw['fault_services'] ?? fault['services']).map(stringValue).filter(Boolean),
     connectors: arrayValue(raw['connectors']).map(cloneJsonValue),
     checkoutSuccessRate: metricNumber(metrics, ['checkout_success_rate', 'successRate']),
     iterationDurationP95: metricNumber(metrics, [

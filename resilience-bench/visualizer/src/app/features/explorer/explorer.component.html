@@ -45,15 +45,49 @@
     <app-summary-cards [run]="run()" />
 
 
-    @if (run().kind === 'heuristic' && state.bestFound(); as best) {
-      <section class="best-found-card" aria-label="Best Found">
-        <div>
-          <span>Best Found</span>
-          <strong>Score {{ formatScore(best.score) }}</strong>
-          <small>Decision #{{ best.decision }}</small>
+    @if (run().kind === 'heuristic') {
+      <section class="search-outcome" aria-label="Search Outcome">
+        <div class="outcome-heading">
+          <h2>Search Outcome</h2>
+          @if (evaluation().bestFoundAtDecision !== undefined) {
+            <p-button label="View Decision" icon="pi pi-arrow-right" iconPos="right" severity="secondary" [outlined]="true" (onClick)="state.selectDecision(evaluation().bestFoundAtDecision!)" />
+          }
         </div>
-        <p-button label="View Decision" icon="pi pi-arrow-right" iconPos="right" severity="secondary" [outlined]="true" (onClick)="state.selectBestFound()" />
+        <dl class="outcome-grid">
+          <div><dt>Best Found</dt><dd>{{ formatMetric(evaluation().bestObservedScore) }}</dd></div>
+          <div><dt>Found at Decision</dt><dd>{{ evaluation().bestFoundAtDecision === undefined ? '—' : '#' + evaluation().bestFoundAtDecision }}</dd></div>
+          <div><dt>Evaluated</dt><dd>{{ evaluation().evaluatedConfigurations }} / {{ evaluation().totalConfigurations || '—' }}</dd></div>
+          <div><dt>Explored</dt><dd>{{ formatPercent(evaluation().exploredRatio) }}</dd></div>
+          <div><dt>Search Space Reduction</dt><dd>{{ formatPercent(evaluation().searchSpaceReduction) }}</dd></div>
+          @if (evaluation().referenceCompatible) {
+            <div><dt>Reference Best</dt><dd>{{ formatMetric(evaluation().referenceBestScore) }}</dd></div>
+            <div><dt>Absolute Gap</dt><dd>{{ formatMetric(evaluation().absoluteGap) }}</dd></div>
+            <div><dt>Relative Gap</dt><dd>{{ evaluation().relativeGap === undefined ? '—' : formatScore(evaluation().relativeGap!) + '%' }}</dd></div>
+            @for (quality of evaluation().qualityThresholds; track quality.threshold) {
+              <div><dt>{{ quality.threshold * 100 }}% quality reached at</dt><dd>{{ quality.reachedAtDecision === undefined ? 'Not reached' : 'Decision #' + quality.reachedAtDecision }}</dd></div>
+            }
+          }
+        </dl>
+        @if (run().referenceResults.length > 0 && !evaluation().referenceCompatible) {
+          <p class="reference-warning">Quantitative reference comparison is unavailable: {{ evaluation().referenceCompatibilityReason }}</p>
+        }
       </section>
+
+      @if (evaluation().contextEvaluations.length > 0) {
+        <section class="context-outcome" aria-label="By Operational Context">
+          <h2>By Operational Context</h2>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Context</th><th>Heuristic Success Rate</th><th>Reference Success Rate</th><th>Heuristic p95</th><th>Reference p95</th></tr></thead>
+              <tbody>
+                @for (context of evaluation().contextEvaluations; track context.context) {
+                  <tr><td>{{ context.context }}</td><td>{{ formatMetric(context.heuristicSuccessRate) }}</td><td>{{ formatMetric(context.referenceSuccessRate) }}</td><td>{{ formatMetric(context.heuristicP95) }}</td><td>{{ formatMetric(context.referenceP95) }}</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
     }
 
     <div class="chart-grid" [class.legacy]="run().kind === 'legacy-exhaustive'">

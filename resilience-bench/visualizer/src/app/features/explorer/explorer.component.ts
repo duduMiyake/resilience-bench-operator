@@ -6,6 +6,7 @@ import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { NormalizedRun } from '../../core/models/visualizer.models';
 import { ExplorerStateService } from '../../core/services/explorer-state.service';
+import { RunEvaluationService } from '../../core/services/run-evaluation.service';
 import { DecisionDetailsComponent } from './decision-details.component';
 import { DecisionTimelineComponent } from './decision-timeline.component';
 import { LegacyResultsComponent } from './legacy-results.component';
@@ -41,7 +42,9 @@ export class ExplorerComponent {
   readonly run = input.required<NormalizedRun>();
   readonly loadAnother = output<void>();
   readonly state = inject(ExplorerStateService);
+  private readonly evaluationService = inject(RunEvaluationService);
   readonly showHelp = signal(false);
+  readonly evaluation = computed(() => this.evaluationService.evaluate(this.run()));
 
   readonly workloadValues = computed(() => distinctNumbers(this.run().contexts.map((context) => context.workloadUsers)));
   readonly faultValues = computed(() => distinctNumbers(this.run().contexts.map((context) => context.faultPercentage)));
@@ -77,6 +80,14 @@ export class ExplorerComponent {
 
   formatScore(score: number): string {
     return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(score);
+  }
+
+  formatPercent(ratio: number | undefined): string {
+    return ratio === undefined ? '—' : `${(ratio * 100).toFixed(1)}%`;
+  }
+
+  formatMetric(value: number | undefined): string {
+    return value === undefined ? '—' : this.formatScore(value);
   }
 }
 
