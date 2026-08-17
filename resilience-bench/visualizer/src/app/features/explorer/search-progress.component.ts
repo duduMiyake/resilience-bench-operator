@@ -52,20 +52,15 @@ export class SearchProgressComponent {
 
     const datasets: ChartData<'line'>['datasets'] = [
       {
-        label: 'Observed Score - Initial Sample',
-        data: decisions.map((decision, index) => (isInitial(decision) ? score(index) : null)),
-        borderColor: '#2563a5',
-        backgroundColor: '#2563a5',
-        pointRadius: 4,
-        showLine: false,
-      },
-      {
-        label: 'Observed Score - Adaptive Search',
-        data: decisions.map((decision, index) => (!isInitial(decision) ? score(index) : null)),
-        borderColor: '#087f5b',
-        backgroundColor: '#087f5b',
-        pointRadius: 4,
-        showLine: false,
+        label: 'Observed Score',
+        data: decisions.map((_, index) => score(index)),
+        borderColor: '#667085',
+        backgroundColor: '#667085',
+        borderWidth: 1,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.1,
+        spanGaps: true,
       },
     ];
 
@@ -76,7 +71,8 @@ export class SearchProgressComponent {
         borderColor: '#c2410c',
         backgroundColor: '#c2410c',
         borderWidth: 2,
-        pointRadius: 0,
+        pointRadius: decisions.map((decision) => decision.aggregatedResult?.improvedBest ? 3 : 0),
+        pointHoverRadius: 5,
         tension: 0.15,
         spanGaps: true,
       });

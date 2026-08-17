@@ -38,6 +38,14 @@
       }
     </section>
 
+    <aside class="score-explanation" aria-label="How the score is calculated">
+      <div>
+        <h2>How the score is calculated</h2>
+        <p class="score-formula">Score = Checkout Success Rate − p95 Iteration Duration</p>
+      </div>
+      <p>Higher scores are better. The heuristic uses this score to compare configurations and guide the search. Because the success rate is at most 1 and duration is non-negative, the theoretical maximum score is 1; scores can be negative when duration is high.</p>
+    </aside>
+
     @for (warning of run().warnings; track warning) {
       <p-message severity="info">{{ warning }}</p-message>
     }
@@ -53,21 +61,47 @@
             <p-button label="View Decision" icon="pi pi-arrow-right" iconPos="right" severity="secondary" [outlined]="true" (onClick)="state.selectDecision(evaluation().bestFoundAtDecision!)" />
           }
         </div>
-        <dl class="outcome-grid">
-          <div><dt>Best Found</dt><dd>{{ formatMetric(evaluation().bestObservedScore) }}</dd></div>
-          <div><dt>Found at Decision</dt><dd>{{ evaluation().bestFoundAtDecision === undefined ? '—' : '#' + evaluation().bestFoundAtDecision }}</dd></div>
-          <div><dt>Evaluated</dt><dd>{{ evaluation().evaluatedConfigurations }} / {{ evaluation().totalConfigurations || '—' }}</dd></div>
-          <div><dt>Explored</dt><dd>{{ formatPercent(evaluation().exploredRatio) }}</dd></div>
-          <div><dt>Search Space Reduction</dt><dd>{{ formatPercent(evaluation().searchSpaceReduction) }}</dd></div>
+        <p class="outcome-summary">{{ outcomeSummary() }}</p>
+        <div class="outcome-groups">
+          <section class="outcome-group" aria-labelledby="best-result-heading">
+            <h3 id="best-result-heading">Best Result</h3>
+            <dl>
+              <div><dt>Best Found</dt><dd>{{ formatOutcomeMetric(evaluation().bestObservedScore) }} score</dd></div>
+              <div><dt>Found at</dt><dd>{{ evaluation().bestFoundAtDecision === undefined ? '—' : 'Decision #' + evaluation().bestFoundAtDecision }}</dd></div>
+            </dl>
+          </section>
+
           @if (evaluation().referenceCompatible) {
-            <div><dt>Reference Best</dt><dd>{{ formatMetric(evaluation().referenceBestScore) }}</dd></div>
-            <div><dt>Absolute Gap</dt><dd>{{ formatMetric(evaluation().absoluteGap) }}</dd></div>
-            <div><dt>Relative Gap</dt><dd>{{ evaluation().relativeGap === undefined ? '—' : formatScore(evaluation().relativeGap!) + '%' }}</dd></div>
-            @for (quality of evaluation().qualityThresholds; track quality.threshold) {
-              <div><dt>{{ quality.threshold * 100 }}% quality reached at</dt><dd>{{ quality.reachedAtDecision === undefined ? 'Not reached' : 'Decision #' + quality.reachedAtDecision }}</dd></div>
-            }
+            <section class="outcome-group" aria-labelledby="reference-comparison-heading">
+              <h3 id="reference-comparison-heading">Reference Comparison</h3>
+              <dl>
+                <div><dt>Reference Best <i class="pi pi-info-circle" pTooltip="Best score found in the exhaustive reference for the same search problem." aria-label="Reference Best information"></i></dt><dd>{{ formatOutcomeMetric(evaluation().referenceBestScore) }} score</dd></div>
+                <div><dt>Absolute Gap <i class="pi pi-info-circle" pTooltip="Difference between the exhaustive reference best score and the best score found by this heuristic." aria-label="Absolute Gap information"></i></dt><dd>{{ formatOutcomeMetric(evaluation().absoluteGap) }} score points below reference</dd></div>
+                <div><dt>Relative Gap <i class="pi pi-info-circle" pTooltip="Absolute gap relative to the exhaustive reference best score." aria-label="Relative Gap information"></i></dt><dd>{{ formatRelativeGap(evaluation().relativeGap) }} below reference</dd></div>
+              </dl>
+            </section>
           }
-        </dl>
+
+          <section class="outcome-group" aria-labelledby="search-effort-heading">
+            <h3 id="search-effort-heading">Search Effort</h3>
+            <dl>
+              <div><dt>Evaluated</dt><dd>{{ evaluation().evaluatedConfigurations }} of {{ evaluation().totalConfigurations || '—' }} configurations</dd></div>
+              <div><dt>Explored</dt><dd>{{ formatOutcomePercent(evaluation().exploredRatio) }} of search space</dd></div>
+              <div><dt>Search Space Reduction <i class="pi pi-info-circle" pTooltip="Percentage of the configuration space that did not need to be evaluated compared with exhaustive search." aria-label="Search Space Reduction information"></i></dt><dd>{{ formatOutcomePercent(evaluation().searchSpaceReduction) }} fewer configurations evaluated</dd></div>
+            </dl>
+          </section>
+
+          @if (evaluation().referenceCompatible) {
+            <section class="outcome-group" aria-labelledby="quality-milestones-heading">
+              <h3 id="quality-milestones-heading">Quality Milestones <i class="pi pi-info-circle" pTooltip="The first heuristic decision where the best score found so far reached this percentage of the exhaustive reference best." aria-label="Quality Milestones information"></i></h3>
+              <dl>
+                @for (quality of evaluation().qualityThresholds; track quality.threshold) {
+                  <div><dt>{{ quality.threshold * 100 }}% of reference</dt><dd>{{ quality.reachedAtDecision === undefined ? 'Not reached' : 'Reached at Decision #' + quality.reachedAtDecision }}</dd></div>
+                }
+              </dl>
+            </section>
+          }
+        </div>
         @if (run().referenceResults.length > 0 && !evaluation().referenceCompatible) {
           <p class="reference-warning">Quantitative reference comparison is unavailable: {{ evaluation().referenceCompatibilityReason }}</p>
         }
@@ -75,13 +109,41 @@
 
       @if (evaluation().contextEvaluations.length > 0) {
         <section class="context-outcome" aria-label="By Operational Context">
-          <h2>By Operational Context</h2>
+          <div class="context-heading">
+            <div>
+              <h2>By Operational Context</h2>
+              <p>Metrics are evaluated independently within each operational context and may come from different configurations.</p>
+            </div>
+            <i class="pi pi-info-circle" pTooltip="Success Rate and p95 Latency are evaluated independently and may come from different configurations." aria-label="Independent metrics information"></i>
+          </div>
           <div class="table-scroll">
             <table>
-              <thead><tr><th>Context</th><th>Heuristic Success Rate</th><th>Reference Success Rate</th><th>Heuristic p95</th><th>Reference p95</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Context</th>
+                  <th><span>Success Rate ↑</span><small>Higher is better</small></th>
+                  <th><span>p95 Latency ↓</span><small>Lower is better</small></th>
+                </tr>
+              </thead>
               <tbody>
                 @for (context of evaluation().contextEvaluations; track context.context) {
-                  <tr><td>{{ context.context }}</td><td>{{ formatMetric(context.heuristicSuccessRate) }}</td><td>{{ formatMetric(context.referenceSuccessRate) }}</td><td>{{ formatMetric(context.heuristicP95) }}</td><td>{{ formatMetric(context.referenceP95) }}</td></tr>
+                  <tr>
+                    <td class="context-name">{{ context.context }}</td>
+                    <td>
+                      <dl class="context-metrics">
+                        <div><dt>Heuristic Best <i class="pi pi-info-circle" pTooltip="Highest checkout success rate found among configurations evaluated by the heuristic for this operational context." aria-label="Heuristic Best Success Rate information"></i></dt><dd>{{ formatContextSuccessRate(context.heuristicSuccessRate) }}</dd></div>
+                        <div><dt>Reference Best <i class="pi pi-info-circle" pTooltip="Highest checkout success rate available in the exhaustive reference for the same operational context." aria-label="Reference Best Success Rate information"></i></dt><dd>{{ formatContextSuccessRate(context.referenceSuccessRate) }}</dd></div>
+                        <div class="context-gap"><dt>Gap <i class="pi pi-info-circle" pTooltip="Difference between the heuristic and exhaustive reference success rates, expressed in percentage points." aria-label="Success Rate Gap information"></i></dt><dd>{{ formatSuccessGap(context.heuristicSuccessRate, context.referenceSuccessRate) }}</dd></div>
+                      </dl>
+                    </td>
+                    <td>
+                      <dl class="context-metrics">
+                        <div><dt>Heuristic Best <i class="pi pi-info-circle" pTooltip="Lowest p95 iteration duration found among configurations evaluated by the heuristic for this operational context." aria-label="Heuristic Best p95 information"></i></dt><dd>{{ formatContextDuration(context.heuristicP95) }}</dd></div>
+                        <div><dt>Reference Best <i class="pi pi-info-circle" pTooltip="Lowest p95 iteration duration available in the exhaustive reference for the same operational context." aria-label="Reference Best p95 information"></i></dt><dd>{{ formatContextDuration(context.referenceP95) }}</dd></div>
+                        <div class="context-gap"><dt>Gap <i class="pi pi-info-circle" pTooltip="Difference between the heuristic and exhaustive reference p95 latency. Lower latency is better." aria-label="p95 Latency Gap information"></i></dt><dd>{{ formatLatencyGap(context.heuristicP95, context.referenceP95) }}</dd></div>
+                      </dl>
+                    </td>
+                  </tr>
                 }
               </tbody>
             </table>

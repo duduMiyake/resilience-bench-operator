@@ -24,11 +24,11 @@
 .chart-frame {
   position: relative;
   width: 100%;
-  height: 360px;
+  height: 520px;
 }
 
 .chart-frame.compact {
-  height: 290px;
+  height: 520px;
 }
 
 .legend,
@@ -60,6 +60,20 @@
   background: #98a2b3;
 }
 
+.path {
+  background: #087f5b;
+}
+
+.start,
+.end {
+  background: #2563a5;
+}
+
+.best-found {
+  background: #b45309;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
 .visited,
 .adaptive {
   background: #087f5b;
@@ -78,6 +92,19 @@
   background: #2563a5;
 }
 
+.previous,
+.next {
+  opacity: 0.55;
+}
+
+.previous {
+  background: #2563a5;
+}
+
+.next {
+  background: #087f5b;
+}
+
 @media (max-width: 640px) {
   .panel-heading {
     flex-direction: column;
@@ -89,7 +116,7 @@
   }
 
   .chart-frame {
-    height: 320px;
+    height: 360px;
   }
 }
 
@@ -136,6 +163,26 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  color: var(--rb-muted);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.chart-action {
+  white-space: nowrap;
+}
+
+.chart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.decision-navigation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
   color: var(--rb-muted);
   font-size: 0.76rem;
   white-space: nowrap;

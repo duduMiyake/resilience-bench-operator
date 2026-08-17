@@ -22,7 +22,7 @@ export class ExplorerStateService {
   readonly workloadUsers = signal<number | null>(null);
   readonly faultPercentage = signal<number | null>(null);
   readonly isPlaying = signal(false);
-  readonly showSearchPath = signal(false);
+  readonly showSearchPath = signal(true);
 
   private playbackTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -102,7 +102,7 @@ export class ExplorerStateService {
     this.run.set(run);
     this.workloadUsers.set(null);
     this.faultPercentage.set(null);
-    this.showSearchPath.set(false);
+    this.showSearchPath.set(true);
     this.selectedDecisionNumber.set(run.decisions[0]?.decision ?? null);
   }
 
@@ -112,7 +112,7 @@ export class ExplorerStateService {
     this.selectedDecisionNumber.set(null);
     this.workloadUsers.set(null);
     this.faultPercentage.set(null);
-    this.showSearchPath.set(false);
+    this.showSearchPath.set(true);
   }
 
   selectDecision(decision: number): void {

@@ -4,6 +4,7 @@ import { ButtonModule } from 'primeng/button';
 import { MessageModule } from 'primeng/message';
 import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
 import { NormalizedRun } from '../../core/models/visualizer.models';
 import { ExplorerStateService } from '../../core/services/explorer-state.service';
 import { RunEvaluationService } from '../../core/services/run-evaluation.service';
@@ -27,6 +28,7 @@ interface FilterOption {
     MessageModule,
     SelectModule,
     TagModule,
+    TooltipModule,
     SummaryCardsComponent,
     ResultSpaceComponent,
     SearchProgressComponent,
@@ -82,12 +84,61 @@ export class ExplorerComponent {
     return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(score);
   }
 
+  formatOutcomeMetric(value: number | undefined): string {
+    return value === undefined ? '—' : value.toFixed(4);
+  }
+
+  formatOutcomePercent(ratio: number | undefined): string {
+    return ratio === undefined ? '—' : `${(ratio * 100).toFixed(1)}%`;
+  }
+
+  formatRelativeGap(value: number | undefined): string {
+    return value === undefined ? '—' : `${value.toFixed(2)}%`;
+  }
+
+  outcomeSummary(): string {
+    const result = this.evaluation();
+    const best = this.formatOutcomeMetric(result.bestObservedScore);
+    const decision = result.bestFoundAtDecision === undefined ? 'an unknown decision' : `Decision #${result.bestFoundAtDecision}`;
+    if (!result.referenceCompatible || result.relativeGap === undefined || result.referenceBestScore === undefined) {
+      return `Best heuristic result: ${best}, found at ${decision}.`;
+    }
+    const comparison = result.relativeGap > 0
+      ? `${this.formatRelativeGap(result.relativeGap)} below the exhaustive reference best (${this.formatOutcomeMetric(result.referenceBestScore)})`
+      : result.relativeGap === 0
+        ? `matches the exhaustive reference best (${this.formatOutcomeMetric(result.referenceBestScore)})`
+        : `${this.formatRelativeGap(Math.abs(result.relativeGap))} above the exhaustive reference best (${this.formatOutcomeMetric(result.referenceBestScore)})`;
+    return `Best heuristic result: ${best}, found at ${decision}, ${comparison}.`;
+  }
+
   formatPercent(ratio: number | undefined): string {
     return ratio === undefined ? '—' : `${(ratio * 100).toFixed(1)}%`;
   }
 
   formatMetric(value: number | undefined): string {
     return value === undefined ? '—' : this.formatScore(value);
+  }
+
+  formatContextSuccessRate(value: number | undefined): string {
+    return value === undefined ? '—' : `${(value * 100).toFixed(2)}%`;
+  }
+
+  formatContextDuration(value: number | undefined): string {
+    return value === undefined ? '—' : `${(value / 1000).toFixed(2)} s`;
+  }
+
+  formatSuccessGap(heuristic: number | undefined, reference: number | undefined): string {
+    if (heuristic === undefined || reference === undefined) return '—';
+    const gap = (heuristic - reference) * 100;
+    if (Math.abs(gap) < 1e-9) return 'Matches reference';
+    return `${Math.abs(gap).toFixed(2)} pp ${gap < 0 ? 'below' : 'above'} reference`;
+  }
+
+  formatLatencyGap(heuristic: number | undefined, reference: number | undefined): string {
+    if (heuristic === undefined || reference === undefined) return '—';
+    const gap = (heuristic - reference) / 1000;
+    if (Math.abs(gap) < 1e-9) return 'Matches reference';
+    return `${Math.abs(gap).toFixed(2)} s ${gap > 0 ? 'slower' : 'faster'}`;
   }
 }
 
