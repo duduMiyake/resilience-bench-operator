@@ -1,0 +1,62 @@
+@if (comparison(); as model) {
+  <app-comparison [model]="model" (loadAnother)="comparison.set(null)" />
+} @else {
+  <main class="comparison-loader-shell">
+    <header class="comparison-heading">
+      <div class="product-mark" aria-hidden="true"><i class="pi pi-arrows-alt"></i></div>
+      <div>
+        <p class="eyebrow">ResilienceBench</p>
+        <h1>Compare Runs</h1>
+        <p>Compare heuristics for the same experimental problem. Runs keep the order in which they are added.</p>
+      </div>
+    </header>
+
+    <p-card styleClass="comparison-loader-card">
+      <div class="run-list">
+        @for (run of runs(); track $index; let index = $index) {
+          <section class="run-draft">
+            <div class="run-draft-heading">
+              <div>
+                <span class="field-label">{{ run.label || 'Run ' + (index + 1) }}</span>
+                <span class="field-hint">Trace + run results</span>
+              </div>
+              @if (runs().length > 2) {
+                <p-button icon="pi pi-trash" severity="danger" [text]="true" ariaLabel="Remove run" (onClick)="removeRun(index)" />
+              }
+            </div>
+            <div class="file-grid two">
+              <div class="file-field">
+                <span class="field-label">Trace</span>
+                <p-fileupload mode="basic" accept=".json,application/json" [auto]="false" [multiple]="false" chooseLabel="Select trace" chooseIcon="pi pi-file" (onSelect)="selectTrace(index, $event)" />
+                @if (run.trace; as file) { <span class="selected-file"><i class="pi pi-check-circle"></i>{{ file.name }}</span> }
+              </div>
+              <div class="file-field">
+                <span class="field-label">Results</span>
+                <p-fileupload mode="basic" accept=".json,application/json" [auto]="false" [multiple]="false" chooseLabel="Select results" chooseIcon="pi pi-database" severity="secondary" (onSelect)="selectResults(index, $event)" />
+                @if (run.results; as file) { <span class="selected-file"><i class="pi pi-check-circle"></i>{{ file.name }}</span> }
+              </div>
+            </div>
+          </section>
+        }
+      </div>
+
+      <div class="loader-actions">
+        <p-button label="Add Run" icon="pi pi-plus" severity="secondary" [outlined]="true" (onClick)="addRun()" />
+      </div>
+
+      <section class="reference-field">
+        <div>
+          <span class="field-label">Shared Exhaustive Reference</span>
+          <span class="field-hint">Optional - loaded once and used by every run</span>
+        </div>
+        <p-fileupload mode="basic" accept=".json,application/json" [auto]="false" [multiple]="false" chooseLabel="Select reference results" chooseIcon="pi pi-map" severity="secondary" (onSelect)="selectReference($event)" />
+        @if (referenceFile(); as file) { <span class="selected-file"><i class="pi pi-check-circle"></i>{{ file.name }}</span> }
+      </section>
+
+      @if (error(); as message) { <p-message severity="error" styleClass="loader-message">{{ message }}</p-message> }
+      <div class="loader-actions">
+        <p-button label="Compare Runs" icon="pi pi-arrow-right" iconPos="right" [disabled]="runs().some((run) => !run.trace || !run.results)" (onClick)="compare()" />
+      </div>
+    </p-card>
+  </main>
+}

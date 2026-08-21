@@ -1,0 +1,74 @@
+<div class="comparison-shell">
+  <header class="comparison-header">
+    <div class="run-identity">
+      <div class="brand-mark" aria-hidden="true"><i class="pi pi-arrows-alt"></i></div>
+      <div>
+        <span class="benchmark-name">{{ model().runs[0]?.run.benchmark }}</span>
+        <div class="run-meta"><span>Compare Runs</span><span class="mono">{{ model().runs.length }} runs</span></div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <p-button label="Load Another Comparison" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="loadAnother.emit()" />
+    </div>
+  </header>
+
+  <main class="comparison-content">
+    @for (warning of model().warnings; track warning) { <p-message severity="warn">{{ warning }}</p-message> }
+
+    <section class="comparison-intro">
+      <div>
+        <h1>Compare Runs</h1>
+        <p>Which heuristic found better solutions, converged faster, and explored the configuration space differently?</p>
+      </div>
+      <div class="run-legend" aria-label="Run identities">
+        @for (run of model().runs; track run.id) {
+          <span><i [style.background]="run.color" [style.--point-style]="run.pointStyle"></i>{{ run.label }}</span>
+        }
+      </div>
+    </section>
+
+    <section class="chart-panel">
+      <div class="panel-heading">
+        <div><h2 class="section-heading">Result Space</h2><p>How did the heuristics explore the result space?</p></div>
+        <div class="panel-tools">
+          <label>Focus Run <p-select [options]="model().runs" optionLabel="label" optionValue="id" [ngModel]="focusedRunId()" (ngModelChange)="focusedRunId.set($event)" ariaLabel="Focus Run" /></label>
+          <label>Operational Context <p-select [options]="contextOptions()" optionLabel="label" optionValue="value" [ngModel]="contextKey()" (ngModelChange)="contextKey.set($event)" ariaLabel="Operational Context" /></label>
+          <p-button label="Reset Zoom" severity="secondary" [text]="true" (onClick)="resetZoom()" />
+        </div>
+      </div>
+      <div class="chart-frame"><p-chart #comparisonChart type="scatter" [data]="resultSpaceData()" [options]="resultSpaceOptions" [plugins]="chartPlugins" height="100%" ariaLabel="Comparison Result Space" /></div>
+      <p class="chart-note">The exhaustive reference appears once as a low-emphasis background. Only {{ focusedRun()?.label }} shows its complete trajectory.</p>
+    </section>
+
+    <section class="chart-panel">
+      <div class="panel-heading"><div><h2 class="section-heading">Convergence</h2><p>How quickly did each heuristic approach its best result?</p></div></div>
+      <div class="chart-frame compact"><p-chart type="line" [data]="convergenceData()" [options]="convergenceOptions" height="100%" ariaLabel="Comparison Convergence" /></div>
+    </section>
+
+    <section class="summary-panel">
+      <div class="panel-heading"><div><h2 class="section-heading">Comparison Summary</h2><p>Values reuse the existing RunEvaluationService semantics. No automatic winner is declared.</p></div></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Heuristic</th><th>Evaluations</th><th>Explored</th><th>Best Observed</th><th>Reference Best</th><th>Absolute Gap</th><th>Relative Gap</th><th>Best Found At</th><th>90% Reference</th><th>95% Reference</th><th>99% Reference</th></tr></thead>
+          <tbody>
+            @for (run of model().runs; track run.id) {
+              <tr>
+                <td><span class="run-name" [style.color]="run.color"><span class="run-symbol">{{ symbol(run.pointStyle) }}</span>{{ run.label }}</span></td>
+                <td>{{ run.evaluation.evaluatedConfigurations }}</td>
+                <td>{{ formatPercent(run.evaluation.exploredRatio) }}</td>
+                <td>{{ formatScore(run.evaluation.bestObservedScore) }}</td>
+                <td>{{ model().referenceCompatible ? formatScore(run.evaluation.referenceBestScore) : 'Not available' }}</td>
+                <td>{{ model().referenceCompatible ? formatGap(run.evaluation.absoluteGap) : 'Not available' }}</td>
+                <td>{{ model().referenceCompatible ? formatRelativeGap(run.evaluation.relativeGap) : 'Not available' }}</td>
+                <td>{{ run.evaluation.bestFoundAtDecision === undefined ? '—' : 'Evaluation #' + run.evaluation.bestFoundAtDecision }}</td>
+                <td>{{ model().referenceCompatible ? threshold(run, 0.9) : 'Not available' }}</td>
+                <td>{{ model().referenceCompatible ? threshold(run, 0.95) : 'Not available' }}</td>
+                <td>{{ model().referenceCompatible ? threshold(run, 0.99) : 'Not available' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>

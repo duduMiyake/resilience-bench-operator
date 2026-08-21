@@ -55,6 +55,7 @@ public class ScenarioSelectionStrategySelector {
 
   public void validate(Benchmark benchmark) {
     validateResultCache(benchmark);
+    ObjectiveScorer.validate(benchmark);
     var strategy = benchmark.getSpec().getStrategy();
     if (strategy == null) {
       return;
@@ -106,6 +107,12 @@ public class ScenarioSelectionStrategySelector {
 
     if (strategy.getExplorationWeight() != null && strategy.getExplorationWeight() < 0) {
       throw new IllegalArgumentException("strategy.explorationWeight must be greater than or equal to 0");
+    }
+
+    if (ObjectiveScorer.isLegacy(benchmark)) {
+      org.slf4j.LoggerFactory.getLogger(getClass()).warn(
+              "Benchmark {} uses the legacy raw signed-sum objective format; use objective.metrics for normalized scoring",
+              benchmark.getMetadata().getName());
     }
   }
 

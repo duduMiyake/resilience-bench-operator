@@ -13,6 +13,9 @@ public class ObjectiveSpec {
   @JsonPropertyDescription("Metrics that should be minimized")
   private List<String> minimize = new ArrayList<>();
 
+  @JsonPropertyDescription("Structured normalized objective metrics")
+  private List<ObjectiveMetricSpec> metrics;
+
   public ObjectiveSpec() {
   }
 
@@ -21,11 +24,25 @@ public class ObjectiveSpec {
     this.minimize = minimize;
   }
 
+  public static ObjectiveSpec structured(List<ObjectiveMetricSpec> metrics) {
+    var objective = new ObjectiveSpec();
+    objective.metrics = metrics;
+    return objective;
+  }
+
   public List<String> getMaximize() {
-    return maximize;
+    return maximize == null ? List.of() : maximize;
   }
 
   public List<String> getMinimize() {
-    return minimize;
+    return minimize == null ? List.of() : minimize;
+  }
+
+  public List<ObjectiveMetricSpec> getMetrics() {
+    return metrics;
+  }
+
+  public void setMetrics(List<ObjectiveMetricSpec> metrics) {
+    this.metrics = metrics;
   }
 }

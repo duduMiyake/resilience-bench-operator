@@ -3,6 +3,9 @@ package io.resiliencebench.resources.selection;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.resiliencebench.resources.benchmark.Benchmark;
 import io.resiliencebench.resources.benchmark.BenchmarkSpec;
+import io.resiliencebench.resources.benchmark.NormalizationSpec;
+import io.resiliencebench.resources.benchmark.ObjectiveMetricSpec;
+import io.resiliencebench.resources.benchmark.ObjectiveSpec;
 import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.scenario.Connector;
 import io.resiliencebench.resources.scenario.Scenario;
@@ -189,6 +192,33 @@ class KnnAdaptiveScenarioSelectionStrategyTest {
     var benchmark = new Benchmark();
     benchmark.setSpec(new BenchmarkSpec("workload", strategySpec, of()));
     return benchmark;
+  }
+
+  @Test
+  void should_use_normalized_objective_score_for_neighbors_and_prediction() {
+    var objective = ObjectiveSpec.structured(List.of(
+            new ObjectiveMetricSpec("checkout_success_rate", "maximize", 0.5,
+                    new NormalizationSpec("minMax", 0.0, 1.0, null)),
+            new ObjectiveMetricSpec("iteration_duration_p(95)", "minimize", 0.5,
+                    new NormalizationSpec("reciprocal", null, null, 22450.0))));
+    var benchmark = benchmark(new ScenarioSelectionStrategySpec(
+            "knnAdaptive", null, null, 42L, 1, 5, objective, 1, 0.0));
+    var scenarios = of(scenario("good", 0), scenario("candidate", 1));
+    var index = ScenarioConfigurationIndex.from(scenarios);
+    var good = key(index, "good");
+    var expected = 0.5 * 0.9 + 0.5 * 22450.0 / (22450.0 + 22450.0);
+
+    var decision = strategy.selectNextDecision(index, Set.of(good),
+            List.of(new EvaluatedConfiguration(good,
+                    new JsonObject().put("checkout_success_rate", 0.9)
+                            .put("iteration_duration_p(95)", 22450), 1, 1)),
+            benchmark, new Workload()).orElseThrow();
+
+    var metadata = decision.getMetadata();
+    assertEquals(expected, metadata.getJsonArray("nearestNeighbors").getJsonObject(0).getDouble("realScore"));
+    assertEquals(expected, metadata.getDouble("predictedScore"));
+    assertEquals(metadata.getDouble("predictedScore") + metadata.getDouble("explorationBonus"),
+            metadata.getDouble("selectionScore"));
   }
 
   private static EvaluatedConfiguration evaluated(ResilienceConfigurationKey key, double successRate) {

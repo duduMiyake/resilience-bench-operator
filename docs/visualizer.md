@@ -82,7 +82,7 @@ The secondary table is limited to contexts present in both datasets and remains 
 Result Space keeps the current metrics:
 
 - X axis: Checkout Success Rate, where higher is better
-- Y axis: p95 Iteration Duration (s), where lower is better
+- Y axis: p95 Iteration Duration (ms), where lower is better
 
 The preferred direction is therefore toward the lower-right region. Reference points are shown with low emphasis. Initial Sample and Adaptive Search points use different visual styles, the selected decision has a larger ringed marker, and new-best decisions use a separate marker.
 

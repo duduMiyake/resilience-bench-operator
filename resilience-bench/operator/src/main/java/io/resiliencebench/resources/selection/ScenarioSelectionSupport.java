@@ -118,25 +118,7 @@ public final class ScenarioSelectionSupport {
   }
 
   public static double objectiveScore(JsonObject metrics, Benchmark benchmark) {
-    var objective = benchmark.getSpec().getStrategy().getObjective();
-    if (objective == null
-            || ((objective.getMaximize() == null || objective.getMaximize().isEmpty())
-            && (objective.getMinimize() == null || objective.getMinimize().isEmpty()))) {
-      return defaultObjective(metrics);
-    }
-
-    double score = 0.0;
-    if (objective.getMaximize() != null) {
-      for (var metric : objective.getMaximize()) {
-        score += metricValue(metrics, metric);
-      }
-    }
-    if (objective.getMinimize() != null) {
-      for (var metric : objective.getMinimize()) {
-        score -= metricValue(metrics, metric);
-      }
-    }
-    return score;
+    return ObjectiveScorer.score(metrics, benchmark);
   }
 
   static double distanceToClosestEvaluated(Scenario candidate, List<String> evaluatedNames,
@@ -220,37 +202,6 @@ public final class ScenarioSelectionSupport {
       normalizedVectors.put(entry.getKey(), normalized);
     }
     return normalizedVectors;
-  }
-
-  private static double defaultObjective(JsonObject metrics) {
-    double successRate = metrics.containsKey("checkout_success_rate")
-            ? metricValue(metrics, "checkout_success_rate")
-            : metricValue(metrics, "successRate");
-    double latency = metrics.containsKey("iteration_duration_p95")
-            ? metricValue(metrics, "iteration_duration_p95")
-            : metricValue(metrics, "p95Latency");
-    return successRate - latency;
-  }
-
-  private static double metricValue(JsonObject metrics, String metric) {
-    var value = metrics.getValue(metric);
-    if (value == null && "successRate".equals(metric)) {
-      value = metrics.getValue("checkout_success_rate");
-    }
-    if (value == null && "p95Latency".equals(metric)) {
-      value = metrics.getValue("iteration_duration_p95");
-    }
-    if (value instanceof Number number) {
-      return number.doubleValue();
-    }
-    if (value instanceof String text) {
-      try {
-        return Double.parseDouble(text);
-      } catch (NumberFormatException ignored) {
-        return 0.0;
-      }
-    }
-    return 0.0;
   }
 
   private static double distanceToClosestSelected(Scenario candidate, List<Scenario> selected,

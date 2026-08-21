@@ -97,6 +97,18 @@ describe('RunEvaluationService', () => {
     expect(service.evaluate(normalizer.normalize(trace, undefined, reference)).bestObservedScore).toBe(0.4);
   });
 
+  it('aggregates the k6 iteration_duration_p(95) metric for reference scores', () => {
+    const trace = heuristicTrace([0.8], 1, [configuration('a')]);
+    const reference = { results: [result('reference', 'a', 100, 25, 0.9, 0.1)] };
+    reference.results[0]['iteration_duration_p(95)'] = 0.1;
+    delete reference.results[0]['iteration_duration_p95'];
+
+    const evaluation = service.evaluate(normalizer.normalize(trace, undefined, reference));
+
+    expect(evaluation.referenceCompatible).toBe(true);
+    expect(evaluation.referenceBestScore).toBeCloseTo(0.8);
+  });
+
   it('rejects a shared configuration when frontend aggregation diverges from its trace score', () => {
     const trace = heuristicTrace([0.81], 1, [configuration('a')]);
     const reference = { results: [result('reference', 'a', 100, 25, 0.9, 0.1)] };

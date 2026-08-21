@@ -78,6 +78,42 @@ class BenchmarkSpecTest {
   }
 
   @Test
+  void should_load_structured_normalized_objective_from_yaml() {
+    var benchmark = Serialization.unmarshal("""
+            apiVersion: resiliencebench.io/v1beta1
+            kind: Benchmark
+            metadata:
+              name: sample
+            spec:
+              workload: fixed-iterations-loadtest
+              strategy:
+                type: knnAdaptive
+                objective:
+                  metrics:
+                    - name: checkout_success_rate
+                      direction: maximize
+                      weight: 0.5
+                      normalization:
+                        type: minMax
+                        min: 0
+                        max: 1
+                    - name: iteration_duration_p(95)
+                      direction: minimize
+                      normalization:
+                        type: reciprocal
+                        scale: 22450
+              scenarios: []
+            """, Benchmark.class);
+
+    var metrics = benchmark.getSpec().getStrategy().getObjective().getMetrics();
+
+    assertEquals(2, metrics.size());
+    assertEquals("iteration_duration_p(95)", metrics.get(1).getName());
+    assertEquals("reciprocal", metrics.get(1).getNormalization().getType());
+    assertEquals(22450.0, metrics.get(1).getNormalization().getScale());
+  }
+
+  @Test
   void should_load_result_cache_from_yaml() {
     var benchmark = Serialization.unmarshal("""
             apiVersion: resiliencebench.io/v1beta1

@@ -10,6 +10,7 @@ import io.resiliencebench.resources.selection.ConfigurationResultAggregator;
 import io.resiliencebench.resources.selection.ConfigurationSelectionDecision;
 import io.resiliencebench.resources.selection.EvaluatedConfiguration;
 import io.resiliencebench.resources.selection.EvaluatedScenario;
+import io.resiliencebench.resources.selection.ObjectiveScorer;
 import io.resiliencebench.resources.selection.configuration.ResilienceConfigurationKey;
 import io.resiliencebench.resources.selection.configuration.ScenarioConfigurationIndex;
 import io.resiliencebench.support.CustomResourceRepository;
@@ -23,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static io.resiliencebench.resources.selection.ScenarioSelectionSupport.objectiveScore;
 import static io.resiliencebench.support.Annotations.OWNED_BY;
 
 @Service
@@ -61,7 +61,8 @@ public class HeuristicTraceWriter {
     var trace = getTrace(traceFile, benchmark, queue);
     trace.put("totalConfigurationSpaceSize", totalConfigurationSpaceSize)
             .put("initialSamples", initialSamples)
-            .put("maxEvaluations", maxEvaluations);
+            .put("maxEvaluations", maxEvaluations)
+            .put("objective", ObjectiveScorer.traceMetadata(benchmark));
     updateSummary(trace);
     fileProvider.writeToFile(traceFile, trace.encode());
   }
@@ -116,7 +117,7 @@ public class HeuristicTraceWriter {
       return;
     }
 
-    appendScenarioCompletedEvent(trace, decision.get(), scenario, source, result);
+    appendScenarioCompletedEvent(trace, benchmark, decision.get(), scenario, source, result);
     appendConfigurationEvaluatedIfComplete(trace, benchmark, queue, configurationIndex, configurationKey, decision.get());
     updateSummary(trace);
     fileProvider.writeToFile(traceFile, trace.encode());
@@ -185,7 +186,7 @@ public class HeuristicTraceWriter {
     return decisionJson;
   }
 
-  private void appendScenarioCompletedEvent(JsonObject trace, JsonObject decision, Scenario scenario,
+  private void appendScenarioCompletedEvent(JsonObject trace, Benchmark benchmark, JsonObject decision, Scenario scenario,
                                             String source, JsonObject result) {
     var executions = decision.getJsonArray("executions", new JsonArray());
     var scenarioName = scenario.getMetadata().getName();
@@ -201,7 +202,7 @@ public class HeuristicTraceWriter {
     var execution = scenarioContext(scenario)
             .put("source", source)
             .put("scenarioHash", cacheKeyFactory.hash(scenario))
-            .put("resultScore", scenarioResultCache.resultScore(result))
+            .put("resultScore", scenarioResultCache.resultScore(benchmark, result))
             .put("completedAt", completedAt);
     executions.add(execution);
     decision.put("executions", executions);
@@ -242,7 +243,7 @@ public class HeuristicTraceWriter {
       return;
     }
 
-    double currentScore = objectiveScore(aggregated.get(), benchmark);
+    double currentScore = ObjectiveScorer.score(aggregated.get().getMetrics(), benchmark);
     var previousBest = bestEvaluatedConfiguration(trace);
     boolean improvedBest = previousBest.isEmpty() || currentScore > previousBest.get().score();
     var best = improvedBest

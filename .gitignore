@@ -75,6 +75,7 @@ logs/
 *.log
 *.csv
 *.jsonl
+.local-docs/
 
 # Java/Maven build artifacts
 target/

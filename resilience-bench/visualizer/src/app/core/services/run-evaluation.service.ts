@@ -122,7 +122,7 @@ function aggregateScore(results: NormalizedResult[]): number {
     }
     return 0;
   };
-  return mean(['checkout_success_rate', 'successRate']) - mean(['iteration_duration_p95', 'p95Latency']);
+    return mean(['checkout_success_rate', 'successRate']) - mean(['iteration_duration_p95', 'iteration_duration_p(95)', 'p95Latency']);
 }
 
 function configurationKey(configuration: JsonRecord): string {

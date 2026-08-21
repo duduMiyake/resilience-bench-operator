@@ -5,6 +5,9 @@ import io.resiliencebench.execution.io.FileProvider;
 import io.resiliencebench.execution.io.FileProviderFactory;
 import io.resiliencebench.resources.benchmark.Benchmark;
 import io.resiliencebench.resources.benchmark.BenchmarkSpec;
+import io.resiliencebench.resources.benchmark.NormalizationSpec;
+import io.resiliencebench.resources.benchmark.ObjectiveMetricSpec;
+import io.resiliencebench.resources.benchmark.ObjectiveSpec;
 import io.resiliencebench.resources.benchmark.ResultCacheSpec;
 import io.resiliencebench.resources.benchmark.ScenarioSelectionStrategySpec;
 import io.resiliencebench.resources.queue.ExecutionQueue;
@@ -65,13 +68,34 @@ class ScenarioResultCacheTest {
     assertTrue(fileProvider.files.containsKey(ResultStoragePathFactory.cacheFile(benchmark, keyFactory.hash(scenario))));
   }
 
+  @Test
+  void result_score_uses_the_configured_objective_definition() {
+    var cache = new ScenarioResultCache(InMemoryFileProvider::new, new ScenarioCacheKeyFactory());
+    var benchmark = benchmark(ObjectiveSpec.structured(of(
+            new ObjectiveMetricSpec("checkout_success_rate", "maximize", 0.5,
+                    new NormalizationSpec("minMax", 0.0, 1.0, null)),
+            new ObjectiveMetricSpec("iteration_duration_p(95)", "minimize", 0.5,
+                    new NormalizationSpec("reciprocal", null, null, 22450.0)))));
+
+    var result = cache.resultScore(benchmark, new JsonObject()
+            .put("checkout_success_rate", 0.9)
+            .put("iteration_duration_p(95)", 22450));
+
+    assertEquals(0.7, result);
+  }
+
   private static Benchmark benchmark() {
+    return benchmark(null);
+  }
+
+  private static Benchmark benchmark(ObjectiveSpec objective) {
     var benchmark = new Benchmark();
     var meta = new ObjectMeta();
     meta.setName("onlineboutique");
     benchmark.setMetadata(meta);
     benchmark.setSpec(new BenchmarkSpec("workload",
-            new ScenarioSelectionStrategySpec("knnAdaptive", null, null, null),
+            new ScenarioSelectionStrategySpec("knnAdaptive", null, null, null,
+                    null, null, objective),
             new ResultCacheSpec(true, "readWrite", "/results/cache", "/results/runs"), of()));
     return benchmark;
   }

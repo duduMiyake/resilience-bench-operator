@@ -216,6 +216,33 @@ spec:
                   objective:
                     description: Objective metrics used to compare evaluated scenarios
                     properties:
+                      metrics:
+                        description: Normalized multi-objective metric definitions
+                        items:
+                          properties:
+                            direction:
+                              description: Metric direction: maximize or minimize
+                              type: string
+                            name:
+                              description: Metric name in the aggregated result
+                              type: string
+                            normalization:
+                              properties:
+                                max:
+                                  type: number
+                                min:
+                                  type: number
+                                scale:
+                                  type: number
+                                type:
+                                  description: Normalization type: minMax or reciprocal
+                                  type: string
+                              type: object
+                            weight:
+                              description: Optional positive metric weight
+                              type: number
+                          type: object
+                        type: array
                       maximize:
                         description: Metrics that should be maximized
                         items:

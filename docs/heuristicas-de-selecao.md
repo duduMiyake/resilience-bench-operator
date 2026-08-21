@@ -146,21 +146,54 @@ O k-NN usa dois tipos de score:
 - `score real`: score agregado de uma configuracao cujos scenarios operacionais foram concluidos;
 - `score previsto`: estimativa de score para uma configuracao candidata ainda nao avaliada.
 
-O `score real` vem das metricas do resultado e segue o `objective` do benchmark. Por exemplo:
+O `score real` vem das metricas do resultado e segue o `objective` do benchmark. Para novos
+experimentos, use o formato estruturado e normalize metricas com unidades ou magnitudes
+diferentes antes de combina-las:
 
 ```yaml
 objective:
-  maximize:
-    - successRate
-  minimize:
-    - p95Latency
+  metrics:
+    - name: checkout_success_rate
+      direction: maximize
+      weight: 0.5
+      normalization:
+        type: minMax
+        min: 0
+        max: 1
+    - name: iteration_duration_p(95)
+      direction: minimize
+      weight: 0.5
+      normalization:
+        type: reciprocal
+        scale: 22450
 ```
 
-Nesse caso:
+Os pesos sao positivos e normalizados internamente pela soma. `minMax` transforma um
+valor entre limites fixos em qualidade entre `0` e `1` (invertendo a direcao quando
+necessario e limitando valores fora dos limites). `reciprocal`, disponivel inicialmente
+para metricas minimizadas, calcula:
 
 ```text
-score_real = successRate - p95Latency
+qualidade = scale / (scale + valor)
+score_real = soma(peso_efetivo * qualidade_normalizada)
 ```
+
+Assim, o score de configuracao permanece em `[0, 1]` e uma latencia em milissegundos nao
+domina uma taxa de sucesso. No HipsterShop, `22450 ms` e uma calibracao fixa para os
+experimentos; nao e derivada dinamicamente durante a execucao nem convertida para segundos.
+
+O formato antigo continua aceito para compatibilidade:
+
+```yaml
+objective:
+  maximize: [successRate]
+  minimize: [p95Latency]
+```
+
+Ele e explicitamente legado, emite um aviso e conserva a soma assinada bruta
+(`soma(maximize) - soma(minimize)`). Nao misture `metrics` com `maximize`/`minimize`.
+Metricas configuradas ausentes falham explicitamente; nao sao substituidas por `0` nem por
+outro alias.
 
 Para um candidato ainda nao executado, o k-NN:
 
@@ -210,6 +243,11 @@ A formula usada para escolher a proxima configuracao e:
 ```text
 score_de_escolha = score_previsto + explorationWeight * incerteza
 ```
+
+O `score_previsto` usa os mesmos scores normalizados dos vizinhos. O `score_de_escolha` e
+uma prioridade de aquisicao: o bonus de exploracao usa a distancia do espaco de configuracao
+e pode fazer esse valor ultrapassar `1`. Ele nao e um score de desempenho e nao deve ser
+limitado ao intervalo `[0, 1]`.
 
 Onde:
 

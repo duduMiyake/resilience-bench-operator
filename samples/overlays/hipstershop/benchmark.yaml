@@ -141,7 +141,26 @@ metadata:
 spec:
   workload: k6-loadtest
   strategy:
-    type: exhaustive
+    type: knnAdaptive
+    initialSamples: 5
+    maxConfigurations: 20
+    neighbors: 3
+    explorationWeight: 0.1
+    objective:
+      metrics:
+        - name: checkout_success_rate
+          direction: maximize
+          weight: 0.5
+          normalization:
+            type: minMax
+            min: 0
+            max: 1
+        - name: iteration_duration_p(95)
+          direction: minimize
+          weight: 0.5
+          normalization:
+            type: reciprocal
+            scale: 22450
   resultCache:
     enabled: true
     mode: readWrite
@@ -187,4 +206,3 @@ spec:
                 value: ["1", "1.5", "2.0"]
           destination:
             name: paymentservice
-

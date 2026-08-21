@@ -6,6 +6,7 @@ import io.resiliencebench.resources.benchmark.Benchmark;
 import io.resiliencebench.resources.benchmark.ResultCacheSpec;
 import io.resiliencebench.resources.queue.ExecutionQueue;
 import io.resiliencebench.resources.scenario.Scenario;
+import io.resiliencebench.resources.selection.ObjectiveScorer;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.springframework.stereotype.Service;
@@ -91,27 +92,7 @@ public class ScenarioResultCache {
             .orElseGet(() -> new JsonObject().put("results", new JsonArray()));
   }
 
-  public double resultScore(JsonObject metrics) {
-    var successRate = metricValue(metrics.containsKey("checkout_success_rate")
-            ? metrics.getValue("checkout_success_rate")
-            : metrics.getValue("successRate"));
-    var latency = metricValue(metrics.containsKey("iteration_duration_p95")
-            ? metrics.getValue("iteration_duration_p95")
-            : metrics.getValue("p95Latency"));
-    return successRate - latency;
-  }
-
-  private static double metricValue(Object value) {
-    if (value instanceof Number number) {
-      return number.doubleValue();
-    }
-    if (value instanceof String text) {
-      try {
-        return Double.parseDouble(text);
-      } catch (NumberFormatException ignored) {
-        return 0.0;
-      }
-    }
-    return 0.0;
+  public double resultScore(Benchmark benchmark, JsonObject metrics) {
+    return ObjectiveScorer.score(metrics, benchmark);
   }
 }
