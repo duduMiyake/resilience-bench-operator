@@ -1,9 +1,10 @@
 import { ComparisonService } from './comparison.service';
 import { RunEvaluationService } from './run-evaluation.service';
 import { RunNormalizerService } from './run-normalizer.service';
+import { ObjectiveScorer } from './objective-scorer.service';
 
 describe('ComparisonService', () => {
-  const service = new ComparisonService(new RunNormalizerService(), new RunEvaluationService());
+  const service = new ComparisonService(new RunNormalizerService(), new RunEvaluationService(new ObjectiveScorer()));
 
   it('loads two or more runs in insertion order and assigns stable identities', () => {
     const model = service.build([input('knnAdaptive', 'a'), input('randomSampling', 'b')]);
@@ -39,6 +40,33 @@ describe('ComparisonService', () => {
     const reference = { results: [result(100, 25)] };
     const withReference = service.build([input('a', 'a'), input('b', 'b')], reference);
     expect(withReference.referenceResults).toHaveLength(1);
+  });
+
+  it('accepts runs with equal structured objectives', () => {
+    const first = input('knnAdaptive', 'a');
+    const second = input('randomSampling', 'b');
+    (first.trace as Record<string, unknown>)['objective'] = structuredObjective();
+    (second.trace as Record<string, unknown>)['objective'] = structuredObjective();
+
+    expect(service.build([first, second]).errors).toEqual([]);
+  });
+
+  it('rejects runs with different effective weights', () => {
+    const first = input('knnAdaptive', 'a');
+    const second = input('randomSampling', 'b');
+    (first.trace as Record<string, unknown>)['objective'] = structuredObjective(0.5);
+    (second.trace as Record<string, unknown>)['objective'] = structuredObjective(0.6);
+
+    expect(service.build([first, second]).errors.join(' ')).toContain('different objective scoring semantics');
+  });
+
+  it('rejects runs with different normalization parameters', () => {
+    const first = input('knnAdaptive', 'a');
+    const second = input('randomSampling', 'b');
+    (first.trace as Record<string, unknown>)['objective'] = structuredObjective(0.5, 22450);
+    (second.trace as Record<string, unknown>)['objective'] = structuredObjective(0.5, 30000);
+
+    expect(service.build([first, second]).errors.join(' ')).toContain('different objective scoring semantics');
   });
 });
 
@@ -78,4 +106,14 @@ function result(users: number, fault: number): Record<string, unknown> {
 
 function scenarioContext(users: number, fault: number): Record<string, unknown> {
   return { scenario: `scenario-${users}-${fault}`, workload: { name: 'workload', users }, fault: { provider: 'envoy', percentage: fault, services: ['service'] } };
+}
+
+function structuredObjective(successWeight = 0.5, scale = 22450): Record<string, unknown> {
+  return {
+    format: 'structured',
+    metrics: [
+      { name: 'success', direction: 'maximize', effectiveWeight: successWeight, normalization: { type: 'minMax', min: 0, max: 1 } },
+      { name: 'latency', direction: 'minimize', effectiveWeight: 1 - successWeight, normalization: { type: 'reciprocal', scale } },
+    ],
+  };
 }

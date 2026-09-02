@@ -7,6 +7,7 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { NormalizedResult } from '../../core/models/visualizer.models';
 import { ExplorerStateService, isInitialDecision } from '../../core/services/explorer-state.service';
+import { ParetoService } from '../../core/services/pareto.service';
 
 interface ResultPoint extends Point {
   scenario: string;
@@ -14,6 +15,7 @@ interface ResultPoint extends Point {
   phase?: 'Initial Sample' | 'Adaptive Search';
   observedScore?: number;
   improvedBest?: boolean;
+  pareto?: boolean;
   roles?: string[];
 }
 
@@ -32,14 +34,24 @@ interface ChartSelectEvent {
           <p>Checkout success versus p95 latency for the selected operational context.</p>
         </div>
         <div class="panel-tools">
-          <label class="path-toggle">
+          <div class="view-toggles" aria-label="Chart visibility options">
+            <label class="path-toggle">
             <p-toggleswitch [ngModel]="state.showSearchPath()" (ngModelChange)="state.showSearchPath.set($event)" ariaLabel="Show Search Path" />
             <span>Show Search Path</span>
+          </label>
+          <label class="path-toggle">
+            <p-toggleswitch [ngModel]="showReference()" (ngModelChange)="showReference.set($event)" ariaLabel="Show Reference" />
+            <span>Show Reference</span>
+          </label>
+          <label class="path-toggle">
+            <p-toggleswitch [ngModel]="showPareto()" (ngModelChange)="showPareto.set($event)" ariaLabel="Show Pareto" />
+            <span>Show Pareto</span>
           </label>
           <label class="path-toggle">
             <p-toggleswitch [ngModel]="autoFocusSelected()" (ngModelChange)="autoFocusSelected.set($event)" ariaLabel="Auto-focus selected" />
             <span>Auto-focus selected</span>
           </label>
+          </div>
           <div class="decision-navigation" aria-label="Decision navigation">
             <p-button icon="pi pi-chevron-left" severity="secondary" [text]="true" [disabled]="!hasPreviousDecision()" ariaLabel="Previous decision" (onClick)="state.selectPrevious()" />
             <span>Decision {{ selectedPosition() }} of {{ state.visibleDecisions().length }}</span>
@@ -51,6 +63,8 @@ interface ChartSelectEvent {
           </div>
           <div class="legend" aria-label="Legend">
             <span><i class="reference"></i>Reference Space</span>
+            <span><i class="pareto"></i>Pareto Frontier</span>
+            <span><i class="pareto-evaluated"></i>Pareto Evaluated</span>
             <span><i class="path"></i>Search Path</span>
             <span><i class="start"></i>Start</span>
             <span><i class="selected"></i>Current Decision</span>
@@ -76,6 +90,9 @@ interface ChartSelectEvent {
 })
 export class ResultSpaceComponent {
   readonly state = inject(ExplorerStateService);
+  private readonly paretoService = inject(ParetoService);
+  readonly showReference = signal(true);
+  readonly showPareto = signal(true);
   @ViewChild('resultChart') chart?: UIChart;
   readonly autoFocusSelected = signal(false);
   readonly chartPlugins = [zoomPlugin];
@@ -96,17 +113,33 @@ export class ResultSpaceComponent {
   readonly data = computed<ChartData<'scatter', ResultPoint[]>>(() => {
     const path = this.state.searchPath();
     const pathPoints = path.map((point) => this.pathPoint(point));
+    const frontier = this.paretoService.frontier(this.state.visibleReferenceResults());
 
     const datasets: ChartData<'scatter', ResultPoint[]>['datasets'] = [
-      {
+      ...(this.showReference() ? [{
         label: 'Reference Space',
         data: this.toPoints(this.state.visibleReferenceResults()),
         backgroundColor: this.state.showSearchPath() ? 'rgba(152, 162, 179, 0.18)' : 'rgba(152, 162, 179, 0.35)',
         borderColor: this.state.showSearchPath() ? 'rgba(102, 112, 133, 0.28)' : 'rgba(102, 112, 133, 0.45)',
         pointRadius: 3,
         pointHoverRadius: 5,
-      },
+      }] : []),
     ];
+
+    if (this.showPareto() && frontier.length > 0) {
+      datasets.push({
+        label: 'Pareto Frontier (Reference)',
+        data: this.toPoints(frontier),
+        backgroundColor: '#111827',
+        borderColor: '#111827',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointStyle: 'rectRot',
+        borderWidth: 2,
+        showLine: frontier.length > 1,
+        tension: 0,
+      });
+    }
 
     if (this.state.showSearchPath()) {
       datasets.push({
@@ -114,13 +147,37 @@ export class ResultSpaceComponent {
         data: pathPoints,
         borderColor: 'rgba(8, 127, 91, 0.45)',
         backgroundColor: 'rgba(8, 127, 91, 0.1)',
-        borderWidth: 2,
-        pointRadius: 2,
-        pointHoverRadius: 5,
+        borderWidth: 1.5,
+        segment: {
+          borderColor: (context) => {
+            const progress = (context.p1DataIndex + 1) / Math.max(pathPoints.length, 1);
+            return 'rgba(8, 127, 91, ' + (0.08 + progress * 0.55) + ')';
+          },
+        },
+        pointBackgroundColor: (context) => {
+          const progress = (context.dataIndex + 1) / Math.max(pathPoints.length, 1);
+          const color = (context.raw as ResultPoint).phase === 'Initial Sample' ? '37, 99, 165' : '8, 127, 91';
+          return 'rgba(' + color + ', ' + (0.25 + progress * 0.75) + ')';
+        },
+        pointRadius: 3.5,
+        pointHoverRadius: 6,
         pointStyle: (context) => (context.raw as ResultPoint).phase === 'Initial Sample' ? 'circle' : 'rectRot',
         showLine: true,
         spanGaps: false,
-        tension: 0.12,
+        tension: 0,
+      });
+    }
+    const paretoPoints = pathPoints.filter((point) => point.pareto);
+    if (this.showPareto() && paretoPoints.length > 0) {
+      datasets.push({
+        label: 'Pareto Evaluated',
+        data: paretoPoints,
+        backgroundColor: '#ffffff',
+        borderColor: '#111827',
+        pointBorderWidth: 3,
+        pointRadius: 7,
+        pointHoverRadius: 9,
+        pointStyle: 'rectRot',
       });
     }
 
@@ -141,7 +198,7 @@ export class ResultSpaceComponent {
     maintainAspectRatio: false,
     animation: false,
     parsing: false,
-    interaction: { mode: 'nearest', intersect: true },
+    interaction: { mode: 'nearest', intersect: false },
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -164,6 +221,7 @@ export class ResultSpaceComponent {
                 `New Best: ${point.improvedBest ? 'Yes' : 'No'}`,
               );
             }
+            if (point.pareto) lines.push('Pareto Frontier: Evaluated');
             return lines;
           },
         },
@@ -242,7 +300,7 @@ export class ResultSpaceComponent {
       });
   }
 
-  private pathPoint(point: { decision: number; x: number; y: number; phase: 'initial' | 'adaptive'; observedScore?: number; improvedBest?: boolean }): ResultPoint {
+  private pathPoint(point: { decision: number; x: number; y: number; phase: 'initial' | 'adaptive'; observedScore?: number; improvedBest?: boolean; pareto?: boolean }): ResultPoint {
     return {
       x: point.x,
       y: point.y,
@@ -251,6 +309,7 @@ export class ResultSpaceComponent {
       phase: point.phase === 'initial' ? 'Initial Sample' : 'Adaptive Search',
       observedScore: point.observedScore,
       improvedBest: point.improvedBest,
+      pareto: point.pareto,
       roles: this.roleMap(this.state.searchPath().map((item) => item.decision)).get(point.decision),
     };
   }

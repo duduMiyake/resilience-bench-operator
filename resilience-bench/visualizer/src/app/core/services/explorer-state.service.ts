@@ -1,5 +1,6 @@
 import { computed, Injectable, signal } from '@angular/core';
 import { NormalizedDecision, NormalizedResult, NormalizedRun } from '../models/visualizer.models';
+import { ParetoService } from './pareto.service';
 
 export interface BestFoundSummary {
   decision: number;
@@ -13,10 +14,12 @@ export interface SearchPathPoint {
   phase: 'initial' | 'adaptive';
   observedScore?: number;
   improvedBest?: boolean;
+  pareto?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
 export class ExplorerStateService {
+  constructor(private readonly paretoService: ParetoService = new ParetoService()) {}
   readonly run = signal<NormalizedRun | null>(null);
   readonly selectedDecisionNumber = signal<number | null>(null);
   readonly workloadUsers = signal<number | null>(null);
@@ -64,6 +67,7 @@ export class ExplorerStateService {
   });
 
   readonly searchPath = computed<SearchPathPoint[]>(() => {
+    const frontierKeys = new Set(this.paretoService.frontier(this.visibleReferenceResults()).map((result) => this.paretoService.configurationKey(result)));
     const resultByDecision = new Map<number, NormalizedResult>();
     for (const result of this.visibleResults()) {
       if (
@@ -92,6 +96,7 @@ export class ExplorerStateService {
             phase: isInitialDecision(decision) ? 'initial' : 'adaptive',
             observedScore: observedScore(decision),
             improvedBest: decision.aggregatedResult?.improvedBest,
+            pareto: frontierKeys.has(this.paretoService.configurationKey(result)),
           },
         ];
       });

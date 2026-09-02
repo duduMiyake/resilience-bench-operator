@@ -34,6 +34,7 @@ export interface ComparisonPoint {
   pointStyle: string;
   scenario?: string;
   evaluation?: number;
+  pareto?: boolean;
 }
 
 export interface ConvergencePoint {

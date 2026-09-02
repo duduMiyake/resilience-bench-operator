@@ -60,6 +60,16 @@
   background: #98a2b3;
 }
 
+.pareto {
+  background: #111827;
+  transform: rotate(45deg);
+}
+
+.pareto-evaluated {
+  border: 2px solid #111827;
+  background: white;
+}
+
 .path {
   background: #087f5b;
 }
@@ -159,6 +169,13 @@
   gap: 0.45rem;
 }
 
+.view-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem 0.9rem;
+}
+
 .path-toggle {
   display: inline-flex;
   align-items: center;
@@ -191,5 +208,9 @@
 @media (max-width: 640px) {
   .panel-tools {
     justify-items: start;
+  }
+
+  .view-toggles {
+    justify-content: flex-start;
   }
 }

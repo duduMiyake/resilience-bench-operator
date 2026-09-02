@@ -11,6 +11,9 @@ import {
   NormalizedExecution,
   NormalizedResult,
   NormalizedRun,
+  NormalizedObjective,
+  NormalizedObjectiveMetric,
+  NormalizedObjectiveNormalization,
   OperationalContext,
   ScenarioContext,
   VisualizerParseError,
@@ -116,6 +119,7 @@ export class RunNormalizerService {
       benchmark: stringValue(trace['benchmark']) || 'unknown benchmark',
       strategy: stringValue(trace['heuristic']) || 'unknown heuristic',
       runId: stringValue(trace['runId']) || 'unnamed run',
+      objective: normalizeObjective(trace['objective']),
       resultFile: optionalString(trace['resultFile']),
       startedAt: optionalString(trace['startedAt']),
       finishedAt: optionalString(trace['finishedAt']),
@@ -246,6 +250,35 @@ export class RunNormalizerService {
       }))
       .sort((left, right) => left.sequence - right.sequence);
   }
+}
+
+function normalizeObjective(value: unknown): NormalizedObjective | undefined {
+  const raw = asRecord(value);
+  if (!raw) return undefined;
+  const metrics = arrayValue(raw['metrics'])
+    .map(asRecord)
+    .filter((metric): metric is JsonRecord => metric !== undefined)
+    .map(normalizeObjectiveMetric);
+  return {
+    format: stringValue(raw['format']) || 'unknown',
+    metrics,
+  };
+}
+
+function normalizeObjectiveMetric(raw: JsonRecord): NormalizedObjectiveMetric {
+  const normalization = asRecord(raw['normalization']) ?? {};
+  const normalizedNormalization: NormalizedObjectiveNormalization = {
+    type: stringValue(normalization['type']),
+    min: optionalNumber(normalization['min']),
+    max: optionalNumber(normalization['max']),
+    scale: optionalNumber(normalization['scale']),
+  };
+  return {
+    name: stringValue(raw['name']),
+    direction: stringValue(raw['direction']),
+    effectiveWeight: optionalNumber(raw['effectiveWeight']) ?? 0,
+    normalization: normalizedNormalization,
+  };
 }
 
 function normalizeConfiguration(raw: JsonRecord): NormalizedConfiguration {

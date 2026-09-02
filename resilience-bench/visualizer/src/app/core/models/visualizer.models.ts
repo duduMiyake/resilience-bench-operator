@@ -2,12 +2,32 @@ export type JsonRecord = Record<string, unknown>;
 
 export type RunKind = 'heuristic' | 'legacy-exhaustive';
 
+export interface NormalizedObjective {
+  format: string;
+  metrics: NormalizedObjectiveMetric[];
+}
+
+export interface NormalizedObjectiveMetric {
+  name: string;
+  direction: string;
+  effectiveWeight: number;
+  normalization: NormalizedObjectiveNormalization;
+}
+
+export interface NormalizedObjectiveNormalization {
+  type: string;
+  min?: number;
+  max?: number;
+  scale?: number;
+}
+
 export interface NormalizedRun {
   kind: RunKind;
   schemaVersion: number | null;
   benchmark: string;
   strategy: string;
   runId: string;
+  objective?: NormalizedObjective;
   resultFile?: string;
   startedAt?: string;
   finishedAt?: string;

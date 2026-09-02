@@ -4,7 +4,10 @@ import { ComparisonModel } from '../../core/models/comparison.models';
 import { ComparisonService } from '../../core/services/comparison.service';
 import { RunEvaluationService } from '../../core/services/run-evaluation.service';
 import { RunNormalizerService } from '../../core/services/run-normalizer.service';
+import { ObjectiveScorer } from '../../core/services/objective-scorer.service';
 import { ComparisonComponent } from './comparison.component';
+import { NormalizedResult } from '../../core/models/visualizer.models';
+import { ParetoService } from '../../core/services/pareto.service';
 
 describe('ComparisonComponent', () => {
   let fixture: ComponentFixture<ComparisonComponent>;
@@ -12,7 +15,7 @@ describe('ComparisonComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({ imports: [ComparisonComponent], providers: [provideNoopAnimations()] }).compileComponents();
-    const service = new ComparisonService(new RunNormalizerService(), new RunEvaluationService());
+    const service = new ComparisonService(new RunNormalizerService(), new RunEvaluationService(new ObjectiveScorer()));
     model = service.build([input('knnAdaptive', 'a'), input('randomSampling', 'b')]);
     fixture = TestBed.createComponent(ComparisonComponent);
     fixture.componentRef.setInput('model', model);
@@ -46,6 +49,15 @@ describe('ComparisonComponent', () => {
     expect(datasets.filter((dataset) => dataset.label !== 'Exhaustive Reference Best')).toHaveLength(2);
     expect(datasets.find((dataset) => dataset.label === 'knnAdaptive')?.data).toHaveLength(1);
     expect(datasets.find((dataset) => dataset.label === 'randomSampling')?.data).toHaveLength(2);
+  });
+
+  it('keeps only non-dominated points, maximizing success and minimizing p95', () => {
+    const point = (scenario: string, success: number, p95: number) => ({ scenario, checkoutSuccessRate: success, iterationDurationP95: p95, connectors: [], faultServices: [] }) as NormalizedResult;
+    expect(new ParetoService().frontier([
+      point('dominated', 0.8, 200),
+      point('fast', 0.8, 100),
+      point('successful', 0.95, 150),
+    ]).map((result) => result.scenario)).toEqual(['fast', 'successful']);
   });
 });
 

@@ -5,11 +5,14 @@ import {
   RunEvaluation,
 } from '../models/run-evaluation.model';
 import { JsonRecord, NormalizedDecision, NormalizedResult, NormalizedRun } from '../models/visualizer.models';
+import { ObjectiveScorer } from './objective-scorer.service';
 
 const SCORE_TOLERANCE = 1e-9;
 
 @Injectable({ providedIn: 'root' })
 export class RunEvaluationService {
+  constructor(private readonly objectiveScorer: ObjectiveScorer) {}
+
   evaluate(run: NormalizedRun): RunEvaluation {
     const scoredDecisions = run.decisions.filter(
       (decision) => decision.aggregatedResult?.score !== undefined,
@@ -60,8 +63,20 @@ export class RunEvaluationService {
       return evaluation;
     }
 
+    const scoredReferences = [...referenceGroups.entries()].map(([key, results]) => ({
+      key,
+      score: run.objective?.format.toLowerCase() === 'structured'
+        ? this.objectiveScorer.scoreConfiguration(results, run.objective)
+        : { score: this.objectiveScorer.legacyScore(results) },
+    }));
+    const incompatibleReference = scoredReferences.find((reference) => reference.score.score === undefined);
+    if (incompatibleReference) {
+      evaluation.referenceCompatibilityReason = incompatibleReference.score.reason ??
+        'The exhaustive reference contains incompatible metric values.';
+      return evaluation;
+    }
     const referenceScores = new Map(
-      [...referenceGroups.entries()].map(([key, results]) => [key, aggregateScore(results)]),
+      scoredReferences.map(({ key, score }) => [key, score.score as number]),
     );
     const sharedDecisions = scoredDecisions.filter((decision) =>
       referenceScores.has(configurationKey(decision.configuration.normalized)),
@@ -109,20 +124,6 @@ function groupByConfiguration(results: NormalizedResult[]): Map<string, Normaliz
     groups.set(key, [...(groups.get(key) ?? []), result]);
   }
   return groups;
-}
-
-// Mirrors ConfigurationResultAggregator means followed by ScenarioSelectionSupport.defaultObjective.
-function aggregateScore(results: NormalizedResult[]): number {
-  const mean = (keys: string[]) => {
-    for (const key of keys) {
-      const values = results.map((result) => numericValue(result.metrics[key])).filter(isNumber);
-      if (values.length > 0) {
-        return values.reduce((sum, value) => sum + value, 0) / values.length;
-      }
-    }
-    return 0;
-  };
-    return mean(['checkout_success_rate', 'successRate']) - mean(['iteration_duration_p95', 'iteration_duration_p(95)', 'p95Latency']);
 }
 
 function configurationKey(configuration: JsonRecord): string {
@@ -233,15 +234,6 @@ function maxMetric(results: NormalizedResult[], key: 'checkoutSuccessRate'): num
 function minMetric(results: NormalizedResult[], key: 'iterationDurationP95'): number | undefined {
   const values = results.map((result) => result[key]).filter(isNumber);
   return values.length ? Math.min(...values) : undefined;
-}
-
-function numericValue(value: unknown): number | undefined {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
 }
 
 function isNumber(value: number | undefined): value is number {

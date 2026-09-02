@@ -33,11 +33,19 @@
         <div class="panel-tools">
           <label>Focus Run <p-select [options]="model().runs" optionLabel="label" optionValue="id" [ngModel]="focusedRunId()" (ngModelChange)="focusedRunId.set($event)" ariaLabel="Focus Run" /></label>
           <label>Operational Context <p-select [options]="contextOptions()" optionLabel="label" optionValue="value" [ngModel]="contextKey()" (ngModelChange)="contextKey.set($event)" ariaLabel="Operational Context" /></label>
+          <label class="chart-toggle"><input type="checkbox" [checked]="showReference()" (change)="showReference.set($any($event.target).checked)" /> Reference</label>
+          <label class="chart-toggle"><input type="checkbox" [checked]="showPareto()" (change)="showPareto.set($any($event.target).checked)" /> Pareto</label>
+          <label class="chart-toggle"><input type="checkbox" [checked]="showTrajectory()" (change)="showTrajectory.set($any($event.target).checked)" /> Trajectory</label>
           <p-button label="Reset Zoom" severity="secondary" [text]="true" (onClick)="resetZoom()" />
         </div>
       </div>
+      <div class="run-filters" aria-label="Visible heuristics">
+        @for (run of model().runs; track run.id) {
+          <label class="chart-toggle"><input type="checkbox" [checked]="visibleRunIds().has(run.id)" (change)="toggleRun(run.id)" /> <span [style.color]="run.color">{{ run.label }}</span></label>
+        }
+      </div>
       <div class="chart-frame"><p-chart #comparisonChart type="scatter" [data]="resultSpaceData()" [options]="resultSpaceOptions" [plugins]="chartPlugins" height="100%" ariaLabel="Comparison Result Space" /></div>
-      <p class="chart-note">The exhaustive reference appears once as a low-emphasis background. Only {{ focusedRun()?.label }} shows its complete trajectory.</p>
+      <p class="chart-note">The exhaustive reference appears once as a low-emphasis background. The Pareto frontier is shown for the selected context; highlighted heuristic points were evaluated on that frontier. Only {{ focusedRun()?.label }} shows its complete trajectory.</p>
     </section>
 
     <section class="chart-panel">
@@ -49,7 +57,19 @@
       <div class="panel-heading"><div><h2 class="section-heading">Comparison Summary</h2><p>Values reuse the existing RunEvaluationService semantics. No automatic winner is declared.</p></div></div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Heuristic</th><th>Evaluations</th><th>Explored</th><th>Best Observed</th><th>Reference Best</th><th>Absolute Gap</th><th>Relative Gap</th><th>Best Found At</th><th>90% Reference</th><th>95% Reference</th><th>99% Reference</th></tr></thead>
+          <thead><tr>
+            <th title="Estratégia de seleção usada nesta execução.">Heuristic</th>
+            <th title="Quantidade de configurações de resiliência avaliadas pela heurística.">Evaluations</th>
+            <th title="Percentual do espaço total de configurações que foi explorado.">Explored</th>
+            <th title="Maior score observado pela heurística durante a execução.">Best Observed</th>
+            <th title="Maior score encontrado pela execução exhaustive de referência.">Reference Best</th>
+            <th title="Diferença entre o melhor score da referência e o melhor score observado pela heurística.">Absolute Gap</th>
+            <th title="Absolute Gap expressa como percentual do score da referência.">Relative Gap</th>
+            <th title="Número da decisão em que a heurística encontrou seu melhor score.">Best Found At</th>
+            <th title="Primeira decisão em que o melhor score acumulado atingiu 90% do score da referência.">90% Reference</th>
+            <th title="Primeira decisão em que o melhor score acumulado atingiu 95% do score da referência.">95% Reference</th>
+            <th title="Primeira decisão em que o melhor score acumulado atingiu 99% do score da referência.">99% Reference</th>
+          </tr></thead>
           <tbody>
             @for (run of model().runs; track run.id) {
               <tr>

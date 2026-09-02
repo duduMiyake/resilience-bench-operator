@@ -21,6 +21,29 @@ describe('RunNormalizerService', () => {
     });
   });
 
+  it('preserves the structured objective from a v2 trace', () => {
+    const trace = v2Trace();
+    trace['objective'] = {
+      format: 'structured',
+      metrics: [{
+        name: 'latency',
+        direction: 'minimize',
+        effectiveWeight: 0.5,
+        normalization: { type: 'reciprocal', scale: 22450 },
+      }],
+    };
+
+    expect(service.normalize(trace).objective).toEqual({
+      format: 'structured',
+      metrics: [{
+        name: 'latency',
+        direction: 'minimize',
+        effectiveWeight: 0.5,
+        normalization: { type: 'reciprocal', scale: 22450 },
+      }],
+    });
+  });
+
   it('rejects invalid JSON with a friendly parser error', () => {
     expect(() => service.parseJson('{broken', 'trace.json')).toThrowError(VisualizerParseError);
     expect(() => service.parseJson('{broken', 'trace.json')).toThrowError(/JSON/);

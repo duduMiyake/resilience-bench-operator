@@ -1,9 +1,10 @@
 import { RunEvaluationService } from './run-evaluation.service';
 import { RunNormalizerService } from './run-normalizer.service';
+import { ObjectiveScorer } from './objective-scorer.service';
 
 describe('RunEvaluationService', () => {
   const normalizer = new RunNormalizerService();
-  const service = new RunEvaluationService();
+  const service = new RunEvaluationService(new ObjectiveScorer());
 
   it('uses trace scores with maximize semantics and calculates search outcome metrics', () => {
     const trace = heuristicTrace([0.6, 0.8, 0.7], 10);
@@ -18,6 +19,44 @@ describe('RunEvaluationService', () => {
     expect(evaluation.evaluatedConfigurations).toBe(3);
     expect(evaluation.exploredRatio).toBeCloseTo(0.3);
     expect(evaluation.searchSpaceReduction).toBeCloseTo(0.7);
+  });
+
+  it('scores the exhaustive reference with the structured objective from the trace', () => {
+    const trace = heuristicTrace([0.7352661600], 1, [configuration('a')]);
+    trace['objective'] = structuredObjective();
+    const referenceResult = result('reference', 'a', 100, 25, 0.972, 22582.18567095);
+    referenceResult['iteration_duration_p(95)'] = 22582.18567095;
+    const reference = { results: [referenceResult] };
+
+    const evaluation = service.evaluate(normalizer.normalize(trace, undefined, reference));
+
+    expect(evaluation.referenceCompatible).toBe(true);
+    expect(evaluation.referenceBestScore).toBeCloseTo(0.7352661600, 10);
+    expect(evaluation.absoluteGap).toBeCloseTo(0, 10);
+  });
+
+  it('rejects a structured reference missing an explicitly named metric', () => {
+    const trace = heuristicTrace([0.7352661600], 1, [configuration('a')]);
+    trace['objective'] = structuredObjective();
+    const referenceResult = result('reference', 'a', 100, 25, 0.972, 22582.18567095);
+    delete referenceResult['iteration_duration_p95'];
+
+    const evaluation = service.evaluate(normalizer.normalize(trace, undefined, { results: [referenceResult] }));
+
+    expect(evaluation.referenceCompatible).toBe(false);
+    expect(evaluation.referenceCompatibilityReason).toContain("'iteration_duration_p(95)'");
+  });
+
+  it('does not use the legacy raw subtraction for structured traces', () => {
+    const trace = heuristicTrace([0.7352661600], 1, [configuration('a')]);
+    trace['objective'] = structuredObjective();
+    const referenceResult = result('reference', 'a', 100, 25, 0.972, 22582.18567095);
+    referenceResult['iteration_duration_p(95)'] = 22582.18567095;
+    const reference = { results: [referenceResult] };
+
+    const evaluation = service.evaluate(normalizer.normalize(trace, undefined, reference));
+
+    expect(evaluation.referenceBestScore).not.toBeCloseTo(0.972 - 22582.18567095, 5);
   });
 
   it('groups exhaustive scenarios by connector configuration and reproduces the Operator aggregate', () => {
@@ -147,6 +186,26 @@ function heuristicTrace(
 
 function configuration(name: string): Record<string, unknown> {
   return { connectors: [{ name, source: 'source', destination: 'destination', source_env_RETRY: '1' }] };
+}
+
+function structuredObjective(): Record<string, unknown> {
+  return {
+    format: 'structured',
+    metrics: [
+      {
+        name: 'checkout_success_rate',
+        direction: 'maximize',
+        effectiveWeight: 0.5,
+        normalization: { type: 'minMax', min: 0, max: 1 },
+      },
+      {
+        name: 'iteration_duration_p(95)',
+        direction: 'minimize',
+        effectiveWeight: 0.5,
+        normalization: { type: 'reciprocal', scale: 22450 },
+      },
+    ],
+  };
 }
 
 function scenarioContext(users: number, fault: number): Record<string, unknown> {

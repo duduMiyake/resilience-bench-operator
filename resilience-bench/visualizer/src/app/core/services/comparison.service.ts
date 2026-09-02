@@ -43,6 +43,9 @@ export class ComparisonService {
         if (current.run.totalConfigurationSpaceSize !== first.run.totalConfigurationSpaceSize) {
           errors.push(`Run "${current.label}" has a different configuration-space size.`);
         }
+        if (objectiveSignature(current.run) !== objectiveSignature(first.run)) {
+          errors.push(`Run "${current.label}" uses different objective scoring semantics from "${first.label}".`);
+        }
         if (current.evaluation.objectiveDirection !== first.evaluation.objectiveDirection) {
           errors.push(`Run "${current.label}" uses different score direction semantics.`);
         }
@@ -79,6 +82,21 @@ export class ComparisonService {
       contexts: first?.run.contexts.map((context) => context.key) ?? [],
     };
   }
+}
+
+function objectiveSignature(run: ComparisonRun['run']): string {
+  if (!run.objective) return 'legacy';
+  return JSON.stringify({
+    format: run.objective.format,
+    metrics: run.objective.metrics
+      .map((metric) => ({
+        name: metric.name,
+        direction: metric.direction,
+        effectiveWeight: metric.effectiveWeight,
+        normalization: metric.normalization,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+  });
 }
 
 function contextSignature(item: ComparisonRun): string {

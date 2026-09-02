@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ViewChild, computed, effect, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ViewChild, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChartData, ChartOptions, Point } from 'chart.js';
 import { ButtonModule } from 'primeng/button';
@@ -8,6 +8,7 @@ import { SelectModule } from 'primeng/select';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { ComparisonModel, ComparisonPoint, ComparisonRun } from '../../core/models/comparison.models';
 import { NormalizedResult } from '../../core/models/visualizer.models';
+import { ParetoService } from '../../core/services/pareto.service';
 
 @Component({
   selector: 'app-comparison',
@@ -17,10 +18,15 @@ import { NormalizedResult } from '../../core/models/visualizer.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ComparisonComponent {
+  private readonly paretoService = inject(ParetoService);
   readonly model = input.required<ComparisonModel>();
   readonly loadAnother = output<void>();
   readonly focusedRunId = signal('');
   readonly contextKey = signal<string | null>(null);
+  readonly showReference = signal(true);
+  readonly showPareto = signal(true);
+  readonly showTrajectory = signal(true);
+  readonly visibleRunIds = signal<Set<string>>(new Set());
   readonly chartPlugins = [zoomPlugin];
   @ViewChild('comparisonChart') chart?: UIChart;
   readonly contextOptions = computed(() => [
@@ -28,31 +34,53 @@ export class ComparisonComponent {
     ...this.model().contexts.map((key) => ({ label: contextLabel(this.model().runs[0]?.run.contexts.find((context) => context.key === key)?.label ?? key), value: key })),
   ]);
   readonly focusedRun = computed(() => this.model().runs.find((run) => run.id === this.focusedRunId()) ?? this.model().runs[0]);
+  readonly visibleRuns = computed(() => this.model().runs.filter((run) => this.visibleRunIds().has(run.id)));
   readonly resultSpaceData = computed<ChartData<'scatter', ComparisonPoint[]>>(() => {
     const model = this.model();
-    const datasets: ChartData<'scatter', ComparisonPoint[]>['datasets'] = [{
-      label: 'Exhaustive Reference',
-      data: this.toPoints(model.referenceResults, 'reference', 'Exhaustive Reference'),
-      backgroundColor: 'rgba(152, 162, 179, 0.18)',
-      borderColor: 'rgba(102, 112, 133, 0.28)',
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      pointStyle: 'circle',
-    }];
-    for (const run of model.runs) {
-      const points = this.toPoints(run.run.results, run.id, run.label);
+    const frontier = this.paretoService.frontier(model.referenceResults.filter((result) => this.matchesContext(result)));
+    const frontierKeys = new Set(frontier.map((result) => this.paretoService.configurationKey(result)));
+    const datasets: ChartData<'scatter', ComparisonPoint[]>['datasets'] = [];
+    if (this.showReference()) {
+      datasets.push({
+        label: 'Exhaustive Reference',
+        data: this.toPoints(model.referenceResults, 'reference', 'Exhaustive Reference', new Set()),
+        backgroundColor: 'rgba(152, 162, 179, 0.18)',
+        borderColor: 'rgba(102, 112, 133, 0.28)',
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointStyle: 'circle',
+      });
+    }
+    if (this.showPareto() && frontier.length > 0) {
+      const frontierPoints = frontier.map((result) => this.point(result, 'reference', 'Pareto Frontier (Reference)'));
+      datasets.push({
+        label: 'Pareto Frontier (Reference)',
+        data: frontierPoints,
+        backgroundColor: '#111827',
+        borderColor: '#111827',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointStyle: 'rectRot',
+        borderWidth: 2,
+        showLine: frontier.length > 1,
+        tension: 0,
+      });
+    }
+    for (const run of this.visibleRuns()) {
+      const points = this.toPoints(run.run.results, run.id, run.label, frontierKeys);
       datasets.push({
         label: run.label,
         data: points,
         backgroundColor: run.color,
         borderColor: run.color,
-        pointRadius: 5,
-        pointHoverRadius: 7,
+        pointRadius: points.map((point) => point.pareto ? 7 : 5),
+        pointHoverRadius: points.map((point) => point.pareto ? 9 : 7),
         pointStyle: run.pointStyle as never,
+        pointBorderWidth: points.map((point) => point.pareto ? 3 : 1),
       });
     }
     const focused = this.focusedRun();
-    if (focused) {
+    if (focused && this.showTrajectory() && this.visibleRunIds().has(focused.id)) {
       const path = this.pathPoints(focused);
       datasets.push({
         label: `${focused.label} trajectory`,
@@ -71,11 +99,11 @@ export class ComparisonComponent {
     return { datasets };
   });
   readonly convergenceData = computed<ChartData<'line'>>(() => {
-    const datasets: ChartData<'line'>['datasets'] = this.model().runs.map((run) => {
+    const datasets: ChartData<'line'>['datasets'] = this.visibleRuns().map((run) => {
       const points = convergence(run);
       return {
         label: run.label,
-        data: points.map((point) => point.y),
+        data: points.map((point) => ({ x: point.x, y: point.y })),
         borderColor: run.color,
         backgroundColor: run.color,
         pointStyle: run.pointStyle as never,
@@ -92,7 +120,7 @@ export class ComparisonComponent {
       if (reference !== undefined) {
         datasets.push({
           label: 'Exhaustive Reference Best',
-          data: Array.from({ length: maxLength }, () => reference),
+          data: Array.from({ length: maxLength }, (_, index) => ({ x: index + 1, y: reference })),
           borderColor: 'rgba(102, 112, 133, 0.45)',
           backgroundColor: 'rgba(102, 112, 133, 0.45)',
           pointRadius: 0,
@@ -111,6 +139,8 @@ export class ComparisonComponent {
     effect(() => {
       const first = this.model().runs[0]?.id;
       if (first && !this.model().runs.some((run) => run.id === this.focusedRunId())) this.focusedRunId.set(first);
+      const ids = new Set(this.model().runs.map((run) => run.id));
+      if (![...this.visibleRunIds()].some((id) => ids.has(id))) this.visibleRunIds.set(ids);
     });
   }
 
@@ -122,19 +152,32 @@ export class ComparisonComponent {
     return ({ circle: '●', triangle: '▲', rect: '■', rectRot: '◆', star: '★', crossRot: '✚' } as Record<string, string>)[pointStyle] ?? '●';
   }
   resetZoom(): void { this.chart?.chart?.resetZoom('active'); }
+  toggleRun(id: string): void {
+    const visible = new Set(this.visibleRunIds());
+    visible.has(id) ? visible.delete(id) : visible.add(id);
+    this.visibleRunIds.set(visible);
+  }
   threshold(run: ComparisonRun, target: number): string {
     return run.evaluation.qualityThresholds.find((item) => item.threshold === target)?.reachedAtDecision === undefined
       ? 'Not reached'
       : `Evaluation #${run.evaluation.qualityThresholds.find((item) => item.threshold === target)!.reachedAtDecision}`;
   }
 
-  private toPoints(results: NormalizedResult[], runId: string, label: string): ComparisonPoint[] {
-    const context = this.contextKey();
+  private toPoints(results: NormalizedResult[], runId: string, label: string, frontierKeys: Set<string>): ComparisonPoint[] {
     const run = this.model().runs.find((item) => item.id === runId);
     return results
-      .filter((result) => !context || contextOf(result) === context)
+      .filter((result) => this.matchesContext(result))
       .filter((result) => result.checkoutSuccessRate !== undefined && result.iterationDurationP95 !== undefined)
-      .map((result) => ({ x: result.checkoutSuccessRate!, y: result.iterationDurationP95!, runId, label, scenario: result.scenario, pointStyle: run?.pointStyle ?? 'circle' }));
+      .map((result) => ({ x: result.checkoutSuccessRate!, y: result.iterationDurationP95!, runId, label, scenario: result.scenario, pointStyle: run?.pointStyle ?? 'circle', pareto: frontierKeys.has(this.paretoService.configurationKey(result)) }));
+  }
+
+  private point(result: NormalizedResult, runId: string, label: string): ComparisonPoint {
+    return { x: result.checkoutSuccessRate!, y: result.iterationDurationP95!, runId, label, scenario: result.scenario, pointStyle: 'rectRot' };
+  }
+
+  private matchesContext(result: NormalizedResult): boolean {
+    const context = this.contextKey();
+    return !context || contextOf(result) === context;
   }
 
   private pathPoints(run: ComparisonRun): ComparisonPoint[] {
@@ -172,7 +215,7 @@ function chartOptions(title: string): ChartOptions<'scatter'> & ChartOptions<'li
     maintainAspectRatio: false,
     animation: false,
     parsing: false,
-    interaction: { mode: 'nearest', intersect: true },
+    interaction: { mode: 'nearest', intersect: false },
     plugins: {
       legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 9 } },
       title: { display: false, text: title },
