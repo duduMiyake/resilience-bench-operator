@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, effect } from '@angular/core';
+import { parameterLabel, successPercent, displayNumber } from '../../core/models/display';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { JsonRecord, NormalizedConnector, NormalizedDecision } from '../../core/models/visualizer.models';
@@ -13,6 +14,13 @@ import { ExplorerStateService, isInitialDecision, observedScore } from '../../co
 })
 export class DecisionDetailsComponent {
   readonly state = inject(ExplorerStateService);
+  readonly pinned = signal<NormalizedDecision | null>(null);
+  constructor() { effect(() => { this.state.run(); this.pinned.set(null); }); }
+  readonly parameterComparison = computed(() => {
+    const selected = new Map(this.state.selectedDecision()?.configuration.parameters.map(p => [p.path, p.value]) ?? []);
+    const pinned = new Map(this.pinned()?.configuration.parameters.map(p => [p.path, p.value]) ?? []);
+    return [...new Set([...pinned.keys(), ...selected.keys()])].map(path => ({ path, pinned: pinned.get(path) ?? '—', selected: selected.get(path) ?? '—' }));
+  });
   readonly knownMetadataKeys = ['predictedScore', 'uncertainty', 'explorationBonus', 'selectionScore'] as const;
 
   readonly genericMetadata = computed(() => {
@@ -32,6 +40,12 @@ export class DecisionDetailsComponent {
   }
 
   decisionExplanation(decision: NormalizedDecision): string {
+    if (decision.heuristic === 'randomSampling' || this.state.run()?.strategy === 'randomSampling') {
+      return 'This configuration was selected by random sampling before observing its result. Previous scores do not guide this strategy.';
+    }
+    if (decision.heuristic !== 'knnAdaptive' && this.state.run()?.strategy !== 'knnAdaptive') {
+      return 'This configuration was selected by the recorded strategy. No KNN explanation is available for this decision.';
+    }
     if (this.isInitial(decision)) {
       return 'This configuration belongs to the initial sample. Initial configurations are selected before the adaptive KNN search begins, so predicted score, uncertainty, exploration bonus, and selection score are not used for this decision. The results from the initial sample provide the first observations for the adaptive search.';
     }
@@ -101,15 +115,9 @@ export class DecisionDetailsComponent {
     });
   }
 
-  parameterLabel(path: string): string {
-    const key = path.split('.').pop() ?? path;
-    return labelFromMap(key.replace(/^source_env_/, ''), {
-      GRPC_MAX_ATTEMPTS: 'Max Attempts',
-      GRPC_INITIAL_BACKOFF: 'Initial Backoff',
-      GRPC_MAX_BACKOFF: 'Max Backoff',
-      GRPC_BACKOFF_MULTIPLIER: 'Backoff Multiplier',
-    });
-  }
+  readonly parameterLabel = parameterLabel;
+  readonly successPercent = successPercent;
+  readonly displayNumber = displayNumber;
 
   retryLabel(strategy: string): string {
     return strategy === 'NONE' || strategy === 'BASELINE' ? 'Disabled' : 'Enabled';

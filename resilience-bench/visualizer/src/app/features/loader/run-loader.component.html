@@ -35,7 +35,7 @@
       <section class="file-field">
         <div class="file-copy">
           <span class="field-label">Exhaustive Reference</span>
-          <span class="field-hint">Optional - broader result space used only as visual context</span>
+          <span class="field-hint">Optional - compare against exhaustive results when the objective and contexts are compatible</span>
         </div>
         <p-fileupload mode="basic" accept=".json,application/json" [auto]="false" [multiple]="false" chooseLabel="Select reference results" chooseIcon="pi pi-map" severity="secondary" (onSelect)="selectReferenceResults($event)" />
         @if (referenceResultsFile(); as file) {

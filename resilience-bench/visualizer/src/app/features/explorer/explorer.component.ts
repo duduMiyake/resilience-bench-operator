@@ -1,3 +1,4 @@
+import { metricHelp } from '../../core/models/metric-help';
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
@@ -5,7 +6,7 @@ import { MessageModule } from 'primeng/message';
 import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
-import { NormalizedRun } from '../../core/models/visualizer.models';
+import { NormalizedRun, NormalizedObjectiveMetric } from '../../core/models/visualizer.models';
 import { ExplorerStateService } from '../../core/services/explorer-state.service';
 import { RunEvaluationService } from '../../core/services/run-evaluation.service';
 import { DecisionDetailsComponent } from './decision-details.component';
@@ -13,7 +14,8 @@ import { DecisionTimelineComponent } from './decision-timeline.component';
 import { LegacyResultsComponent } from './legacy-results.component';
 import { ResultSpaceComponent } from './result-space.component';
 import { SearchProgressComponent } from './search-progress.component';
-import { SummaryCardsComponent } from './summary-cards.component';
+import { downloadJson } from '../../core/services/download';
+import { parameterLabel } from '../../core/models/display';
 
 interface FilterOption {
   label: string;
@@ -29,7 +31,6 @@ interface FilterOption {
     SelectModule,
     TagModule,
     TooltipModule,
-    SummaryCardsComponent,
     ResultSpaceComponent,
     SearchProgressComponent,
     DecisionTimelineComponent,
@@ -41,12 +42,30 @@ interface FilterOption {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ExplorerComponent {
+  readonly metricHelp = metricHelp;
+  readonly parameterLabel = parameterLabel;
   readonly run = input.required<NormalizedRun>();
   readonly loadAnother = output<void>();
   readonly state = inject(ExplorerStateService);
   private readonly evaluationService = inject(RunEvaluationService);
   readonly showHelp = signal(false);
+  readonly view = signal<'result' | 'investigate'>('result');
   readonly evaluation = computed(() => this.evaluationService.evaluate(this.run()));
+  readonly bestDecision = computed(() => this.run().decisions.find((decision) => decision.decision === this.evaluation().bestFoundAtDecision));
+
+  setView(view: 'result' | 'investigate'): void { this.state.stopPlayback(); this.view.set(view); }
+  investigate(decision: number): void { this.state.selectDecision(decision); this.setView('investigate'); }
+  normalizationLabel(metric: NormalizedObjectiveMetric, index = 0): string {
+    const n = metric.normalization;
+    const value = `m${index + 1}`;
+    if (n.type.toLowerCase() === 'reciprocal') return `${n.scale} / (${n.scale} + ${value})`;
+    if (n.type.toLowerCase() === 'minmax') {
+      const numerator = metric.direction.toLowerCase() === 'minimize' ? `${n.max} − ${value}` : `${value} − ${n.min}`;
+      return `clamp((${numerator}) / (${n.max} − ${n.min}), 0, 1)`;
+    }
+    return 'Formula unavailable for this normalization';
+  }
+  exportAnalysis(): void { downloadJson('resiliencebench-analysis.json', { run: this.run(), evaluation: this.evaluation() }); }
 
   readonly workloadValues = computed(() => distinctNumbers(this.run().contexts.map((context) => context.workloadUsers)));
   readonly faultValues = computed(() => distinctNumbers(this.run().contexts.map((context) => context.faultPercentage)));

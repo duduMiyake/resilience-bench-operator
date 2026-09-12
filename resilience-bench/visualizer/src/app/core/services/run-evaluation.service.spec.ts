@@ -5,6 +5,14 @@ import { ObjectiveScorer } from './objective-scorer.service';
 describe('RunEvaluationService', () => {
   const normalizer = new RunNormalizerService();
   const service = new RunEvaluationService(new ObjectiveScorer());
+  it('retains absolute gaps but suppresses percentages for a negative reference', () => {
+    const trace = heuristicTrace([-100], 1, [configuration('a')]);
+    const evaluation = service.evaluate(normalizer.normalize(trace, undefined, { results: [result('a', 'a', 100, 25, 0, 100)] }));
+    expect(evaluation.referenceCompatible).toBe(true);
+    expect(evaluation.absoluteGap).toBe(0);
+    expect(evaluation.relativeGap).toBeUndefined();
+    expect(evaluation.qualityThresholds).toEqual([]);
+  });
 
   it('uses trace scores with maximize semantics and calculates search outcome metrics', () => {
     const trace = heuristicTrace([0.6, 0.8, 0.7], 10);

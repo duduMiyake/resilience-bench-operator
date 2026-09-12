@@ -18,14 +18,14 @@ describe('ResultSpaceComponent navigation', () => {
     fixture = TestBed.createComponent(ResultSpaceComponent);
     state = TestBed.inject(ExplorerStateService);
     state.setRun(normalizer.normalize(trace(), { results: results() }));
-    expect(state.showSearchPath()).toBe(true);
+    expect(state.showSearchPath()).toBe(false);
   });
 
   it('derives trajectory roles in decision order without Previous or Next categories', () => {
     state.selectDecision(2);
     const datasets = fixture.componentInstance.data().datasets;
 
-    expect(datasetDecisions(datasets, 'Start')).toEqual([1]);
+    expect(datasetDecisions(datasets, 'Start')).toEqual([]);
     expect(datasetDecisions(datasets, 'Current Decision')).toEqual([2]);
     expect(datasetDecisions(datasets, 'Best Found')).toEqual([3]);
     expect(datasetDecisions(datasets, 'Previous Decision')).toEqual([]);
@@ -49,6 +49,36 @@ describe('ResultSpaceComponent navigation', () => {
     expect(fixture.componentInstance.hasPreviousDecision()).toBe(false);
     state.selectDecision(3);
     expect(fixture.componentInstance.hasNextDecision()).toBe(false);
+  });
+  it('focuses incoming and outgoing transitions with the full path opt-in', () => {
+    state.showSearchPath.set(true);
+    state.selectDecision(2);
+    const component = fixture.componentInstance;
+    expect(datasetDecisions(component.data().datasets, 'Incoming decision')).toEqual([1, 2]);
+    expect(datasetDecisions(component.data().datasets, 'Outgoing decision')).toEqual([2, 3]);
+    expect(datasetDecisions(component.data().datasets, 'Complete path')).toEqual([]);
+    component.showFullPath.set(true);
+    expect(datasetDecisions(component.data().datasets, 'Complete path')).toEqual([1, 2, 3]);
+    state.selectDecision(1);
+    expect(component.routeSteps()[0].decision).toBeUndefined();
+    state.selectDecision(3);
+    expect(component.routeSteps()[2].decision).toBeUndefined();
+  });
+  it('keeps coincident decisions addressable without moving measurements', () => {
+    const same = results().map(r => ({ ...r, checkout_success_rate: 0.75, iteration_duration_p95: 100 }));
+    state.setRun(normalizer.normalize(trace(), { results: same }));
+    state.showSearchPath.set(true);
+    state.selectDecision(2);
+    expect(fixture.componentInstance.routeSteps().map(s => s.point?.x)).toEqual([0.75, 0.75, 0.75]);
+    expect(fixture.componentInstance.routeSteps().map(s => s.decision)).toEqual([1, 2, 3]);
+  });
+  it('does not connect through a missing result', () => {
+    state.setRun(normalizer.normalize(trace(), { results: results().filter(r => r['scenario'] !== 'scenario-2') }));
+    state.showSearchPath.set(true);
+    state.selectDecision(2);
+    expect(fixture.componentInstance.routeSteps()[1].point).toBeUndefined();
+    expect(datasetDecisions(fixture.componentInstance.data().datasets, 'Incoming decision')).toEqual([]);
+    expect(datasetDecisions(fixture.componentInstance.data().datasets, 'Outgoing decision')).toEqual([]);
   });
 
   it('resolves Focus Selected for the active context and skips missing points', () => {

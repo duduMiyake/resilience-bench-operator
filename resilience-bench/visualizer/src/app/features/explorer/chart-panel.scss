@@ -5,6 +5,26 @@
   border-radius: 6px;
   background: var(--rb-surface);
 }
+.score-table { margin-top: 1.5rem; border-top: 1px solid var(--rb-border); padding-top: .75rem; }
+.score-table summary { font-size: .95rem; padding: .6rem 0; }
+.score-table .table-scroll { max-height: 440px; overflow: auto; margin-top: .75rem; border: 1px solid var(--rb-border); border-radius: 6px; }
+.score-table table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.score-table caption { padding: 1rem; text-align: left; color: var(--rb-muted); }
+.score-table th, .score-table td { padding: .85rem 1.25rem; border-bottom: 1px solid var(--rb-border); text-align: left; }
+.score-table thead th { position: sticky; top: 0; background: #f4f6f8; z-index: 1; }
+.score-table td:nth-child(2), .score-table td:nth-child(3) { text-align: right; }
+.score-table tbody tr:nth-child(even) { background: #f8fafb; }
+.score-table tbody tr.active-row { background: var(--rb-accent-soft); }
+.score-table button { color: var(--rb-accent); padding: .4rem .65rem; }
+.trajectory-controls { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: 1rem 0; border-block: 1px solid var(--rb-border); }
+.trajectory-controls label { display: inline-flex; gap: .5rem; align-items: center; }
+.decision-route { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0; }
+.decision-route button { text-align: left; display: grid; gap: .4rem; border: 1px solid var(--rb-border); border-radius: 6px; background: white; padding: 1rem; cursor: pointer; }
+.decision-route button.current { border: 2px solid var(--rb-selected); background: #fff7ed; }
+.decision-route small, .chart-note { color: var(--rb-muted); line-height: 1.5; }
+.decision-route button:disabled { cursor: default; }
+.result-frame { height: clamp(440px, 65vh, 760px); }
+@media (max-width: 640px) { .decision-route { grid-template-columns: 1fr; } }
 
 .panel-heading {
   display: flex;
@@ -128,38 +148,6 @@
   .chart-frame {
     height: 360px;
   }
-}
-
-
-.better-x,
-.better-y,
-.preferred-zone {
-  position: absolute;
-  z-index: 1;
-  padding: 0.18rem 0.35rem;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.86);
-  color: var(--rb-accent);
-  font-size: 0.72rem;
-  font-weight: 700;
-  pointer-events: none;
-}
-
-.better-x {
-  right: 1.2rem;
-  bottom: 0.2rem;
-}
-
-.better-y {
-  left: 0.15rem;
-  top: 0.6rem;
-}
-
-.preferred-zone {
-  right: 1.2rem;
-  bottom: 2rem;
-  color: #475467;
-  font-weight: 600;
 }
 
 

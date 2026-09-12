@@ -24,15 +24,17 @@ describe('ComparisonComponent', () => {
 
   it('shows points from every run and one shared reference dataset', () => {
     const datasets = fixture.componentInstance.resultSpaceData().datasets;
-    expect(datasets.map((dataset) => dataset.label)).toEqual(['Exhaustive Reference', 'knnAdaptive', 'randomSampling', 'knnAdaptive trajectory']);
+    expect(datasets.map((dataset) => dataset.label)).toEqual(['Exhaustive Reference', 'knnAdaptive', 'randomSampling']);
     expect(datasets[1].data).toHaveLength(2);
     expect(datasets[2].data).toHaveLength(2);
   });
 
   it('changes only the displayed trajectory when Focus Run changes', () => {
+    fixture.componentInstance.showTrajectory.set(true);
+    fixture.componentInstance.contextKey.set(model.contexts[0]);
     fixture.componentInstance.focusedRunId.set(model.runs[1].id);
     const datasets = fixture.componentInstance.resultSpaceData().datasets;
-    expect(datasets[1].data).toHaveLength(2);
+    expect(datasets[1].data).toHaveLength(1);
     expect(datasets.at(-1)?.label).toBe('randomSampling trajectory');
   });
 

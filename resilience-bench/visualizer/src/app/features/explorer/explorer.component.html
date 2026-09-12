@@ -1,169 +1,93 @@
 <div class="explorer-shell">
   <header class="run-header">
-    <div class="run-identity">
-      <div class="brand-mark" aria-hidden="true"><i class="pi pi-chart-scatter"></i></div>
-      <div>
-        <span class="benchmark-name">{{ run().benchmark }}</span>
-        <div class="run-meta">
-          <p-tag [value]="strategyLabel()" [severity]="run().kind === 'heuristic' ? 'success' : 'secondary'" />
-          <span class="mono">{{ run().runId }}</span>
-        </div>
-      </div>
-    </div>
-
+    <div><span class="benchmark-name">{{ run().benchmark }}</span><div class="run-meta">{{ strategyLabel() }} · {{ run().runId }}</div></div>
     <div class="header-actions">
-      @if (compactContext(); as label) {
-        <span class="context-label">{{ label }}</span>
-      }
-      @if (showWorkloadFilter()) {
-        <p-select [options]="workloadOptions()" optionLabel="label" optionValue="value" [ngModel]="state.workloadUsers()" (ngModelChange)="state.workloadUsers.set($event)" ariaLabel="Filter by workload" />
-      }
-      @if (showFaultFilter()) {
-        <p-select [options]="faultOptions()" optionLabel="label" optionValue="value" [ngModel]="state.faultPercentage()" (ngModelChange)="state.faultPercentage.set($event)" ariaLabel="Filter by fault rate" />
-      }
-      <p-button label="Load Another" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="loadAnother.emit()" />
+      <p-button label="Export analysis" icon="pi pi-download" [outlined]="true" (onClick)="exportAnalysis()" />
+      <p-button label="Open local files" [outlined]="true" (onClick)="loadAnother.emit()" />
     </div>
   </header>
-
   <main class="explorer-content">
-    <section class="read-help">
-      <p-button icon="pi pi-info-circle" label="How to read this view" severity="secondary" [text]="true" (onClick)="showHelp.set(!showHelp())" />
-      @if (showHelp()) {
-        <div class="help-panel">
-          <p><b>Result Space</b> shows where evaluated configurations lie in the performance/reliability result space.</p>
-          <p><b>Search Progress</b> shows how observed and best scores evolved as configurations were evaluated.</p>
-          <p><b>Decision Timeline</b> shows the order in which configurations were selected.</p>
-          <p><b>Decision Details</b> explains why the selected configuration was chosen.</p>
-        </div>
-      }
-    </section>
-
-    <aside class="score-explanation" aria-label="How the score is calculated">
-      <div>
-        <h2>How the score is calculated</h2>
-        <p class="score-formula">Score = Checkout Success Rate − p95 Iteration Duration</p>
-      </div>
-      <p>Higher scores are better. The heuristic uses this score to compare configurations and guide the search. Because the success rate is at most 1 and duration is non-negative, the theoretical maximum score is 1; scores can be negative when duration is high.</p>
-    </aside>
-
-    @for (warning of run().warnings; track warning) {
-      <p-message severity="info">{{ warning }}</p-message>
-    }
-
-    <app-summary-cards [run]="run()" />
-
-
+    @for (warning of run().warnings; track warning) { <p-message severity="warn">{{ warning }}</p-message> }
     @if (run().kind === 'heuristic') {
-      <section class="search-outcome" aria-label="Search Outcome">
-        <div class="outcome-heading">
-          <h2>Search Outcome</h2>
-          @if (evaluation().bestFoundAtDecision !== undefined) {
-            <p-button label="View Decision" icon="pi pi-arrow-right" iconPos="right" severity="secondary" [outlined]="true" (onClick)="state.selectDecision(evaluation().bestFoundAtDecision!)" />
-          }
-        </div>
-        <p class="outcome-summary">{{ outcomeSummary() }}</p>
-        <div class="outcome-groups">
-          <section class="outcome-group" aria-labelledby="best-result-heading">
-            <h3 id="best-result-heading">Best Result</h3>
-            <dl>
-              <div><dt>Best Found</dt><dd>{{ formatOutcomeMetric(evaluation().bestObservedScore) }} score</dd></div>
-              <div><dt>Found at</dt><dd>{{ evaluation().bestFoundAtDecision === undefined ? '—' : 'Decision #' + evaluation().bestFoundAtDecision }}</dd></div>
-            </dl>
-          </section>
-
-          @if (evaluation().referenceCompatible) {
-            <section class="outcome-group" aria-labelledby="reference-comparison-heading">
-              <h3 id="reference-comparison-heading">Reference Comparison</h3>
-              <dl>
-                <div><dt>Reference Best <i class="pi pi-info-circle" pTooltip="Best score found in the exhaustive reference for the same search problem." aria-label="Reference Best information"></i></dt><dd>{{ formatOutcomeMetric(evaluation().referenceBestScore) }} score</dd></div>
-                <div><dt>Absolute Gap <i class="pi pi-info-circle" pTooltip="Difference between the exhaustive reference best score and the best score found by this heuristic." aria-label="Absolute Gap information"></i></dt><dd>{{ formatOutcomeMetric(evaluation().absoluteGap) }} score points below reference</dd></div>
-                <div><dt>Relative Gap <i class="pi pi-info-circle" pTooltip="Absolute gap relative to the exhaustive reference best score." aria-label="Relative Gap information"></i></dt><dd>{{ formatRelativeGap(evaluation().relativeGap) }} below reference</dd></div>
-              </dl>
-            </section>
-          }
-
-          <section class="outcome-group" aria-labelledby="search-effort-heading">
-            <h3 id="search-effort-heading">Search Effort</h3>
-            <dl>
-              <div><dt>Evaluated</dt><dd>{{ evaluation().evaluatedConfigurations }} of {{ evaluation().totalConfigurations || '—' }} configurations</dd></div>
-              <div><dt>Explored</dt><dd>{{ formatOutcomePercent(evaluation().exploredRatio) }} of search space</dd></div>
-              <div><dt>Search Space Reduction <i class="pi pi-info-circle" pTooltip="Percentage of the configuration space that did not need to be evaluated compared with exhaustive search." aria-label="Search Space Reduction information"></i></dt><dd>{{ formatOutcomePercent(evaluation().searchSpaceReduction) }} fewer configurations evaluated</dd></div>
-            </dl>
-          </section>
-
-          @if (evaluation().referenceCompatible) {
-            <section class="outcome-group" aria-labelledby="quality-milestones-heading">
-              <h3 id="quality-milestones-heading">Quality Milestones <i class="pi pi-info-circle" pTooltip="The first heuristic decision where the best score found so far reached this percentage of the exhaustive reference best." aria-label="Quality Milestones information"></i></h3>
-              <dl>
-                @for (quality of evaluation().qualityThresholds; track quality.threshold) {
-                  <div><dt>{{ quality.threshold * 100 }}% of reference</dt><dd>{{ quality.reachedAtDecision === undefined ? 'Not reached' : 'Reached at Decision #' + quality.reachedAtDecision }}</dd></div>
-                }
-              </dl>
-            </section>
-          }
-        </div>
-        @if (run().referenceResults.length > 0 && !evaluation().referenceCompatible) {
-          <p class="reference-warning">Quantitative reference comparison is unavailable: {{ evaluation().referenceCompatibilityReason }}</p>
-        }
-      </section>
-
-      @if (evaluation().contextEvaluations.length > 0) {
-        <section class="context-outcome" aria-label="By Operational Context">
-          <div class="context-heading">
-            <div>
-              <h2>By Operational Context</h2>
-              <p>Metrics are evaluated independently within each operational context and may come from different configurations.</p>
-            </div>
-            <i class="pi pi-info-circle" pTooltip="Success Rate and p95 Latency are evaluated independently and may come from different configurations." aria-label="Independent metrics information"></i>
+      <nav class="view-nav" aria-label="Analysis views">
+        <button class="rb-button" [attr.aria-pressed]="view() === 'result'" (click)="setView('result')">Result</button>
+        <button class="rb-button" [attr.aria-pressed]="view() === 'investigate'" (click)="setView('investigate')">Investigate search</button>
+      </nav>
+      @if (view() === 'result') {
+        <section class="search-outcome" aria-label="Search Outcome">
+          <h1>What did the heuristic find?</h1><p class="outcome-summary">{{ outcomeSummary() }}</p>
+          <div class="result-metrics">
+            <div><span class="term-help" tabindex="0" [pTooltip]="metricHelp.observedScore" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Best observed score ↑</span><strong>{{ formatOutcomeMetric(evaluation().bestObservedScore) }}</strong><small>Found at evaluation {{ evaluation().bestFoundAtDecision ?? '—' }}</small></div>
+            <div><span class="term-help" tabindex="0" [pTooltip]="metricHelp.evaluations" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Configurations evaluated</span><strong>{{ evaluation().evaluatedConfigurations }} / {{ evaluation().totalConfigurations || '—' }}</strong><small>{{ formatOutcomePercent(evaluation().exploredRatio) }} of the search space</small></div>
+            <div><span class="term-help" tabindex="0" [pTooltip]="metricHelp.absoluteGap" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Gap to exhaustive reference ↓</span><strong>{{ evaluation().referenceCompatible ? formatOutcomeMetric(evaluation().absoluteGap) : 'Unavailable' }}</strong><small>{{ evaluation().referenceCompatible ? 'Score points; zero means the same score' : evaluation().referenceCompatibilityReason }}</small></div>
           </div>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Context</th>
-                  <th><span>Success Rate ↑</span><small>Higher is better</small></th>
-                  <th><span>p95 Latency ↓</span><small>Lower is better</small></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (context of evaluation().contextEvaluations; track context.context) {
-                  <tr>
-                    <td class="context-name">{{ context.context }}</td>
-                    <td>
-                      <dl class="context-metrics">
-                        <div><dt>Heuristic Best <i class="pi pi-info-circle" pTooltip="Highest checkout success rate found among configurations evaluated by the heuristic for this operational context." aria-label="Heuristic Best Success Rate information"></i></dt><dd>{{ formatContextSuccessRate(context.heuristicSuccessRate) }}</dd></div>
-                        <div><dt>Reference Best <i class="pi pi-info-circle" pTooltip="Highest checkout success rate available in the exhaustive reference for the same operational context." aria-label="Reference Best Success Rate information"></i></dt><dd>{{ formatContextSuccessRate(context.referenceSuccessRate) }}</dd></div>
-                        <div class="context-gap"><dt>Gap <i class="pi pi-info-circle" pTooltip="Difference between the heuristic and exhaustive reference success rates, expressed in percentage points." aria-label="Success Rate Gap information"></i></dt><dd>{{ formatSuccessGap(context.heuristicSuccessRate, context.referenceSuccessRate) }}</dd></div>
-                      </dl>
-                    </td>
-                    <td>
-                      <dl class="context-metrics">
-                        <div><dt>Heuristic Best <i class="pi pi-info-circle" pTooltip="Lowest p95 iteration duration found among configurations evaluated by the heuristic for this operational context." aria-label="Heuristic Best p95 information"></i></dt><dd>{{ formatContextDuration(context.heuristicP95) }}</dd></div>
-                        <div><dt>Reference Best <i class="pi pi-info-circle" pTooltip="Lowest p95 iteration duration available in the exhaustive reference for the same operational context." aria-label="Reference Best p95 information"></i></dt><dd>{{ formatContextDuration(context.referenceP95) }}</dd></div>
-                        <div class="context-gap"><dt>Gap <i class="pi pi-info-circle" pTooltip="Difference between the heuristic and exhaustive reference p95 latency. Lower latency is better." aria-label="p95 Latency Gap information"></i></dt><dd>{{ formatLatencyGap(context.heuristicP95, context.referenceP95) }}</dd></div>
-                      </dl>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+          <p class="provenance">{{ run().totalScenariosExecuted ?? '—' }} scenarios executed · {{ run().totalCacheHits ?? '—' }} cached results reused. Fewer evaluations do not imply the same reduction in execution time.</p>
         </section>
-      }
-    }
-
-    <div class="chart-grid" [class.legacy]="run().kind === 'legacy-exhaustive'">
-      <app-result-space />
-      @if (run().kind === 'heuristic') {
+        <details class="search-outcome">
+          <summary>Understand the score and reference</summary>
+          @if (run().objective?.format?.toLowerCase() === 'structured') {
+            <p>Score is the weighted sum of normalized metrics, between 0 and 1. Higher is better. Metrics are averaged over the required contexts before normalization.</p>
+            <div class="score-formula" role="group" aria-label="Score equals the sum of each effective weight multiplied by its normalized metric quality">
+              <strong>Score =</strong>
+              @for (metric of run().objective!.metrics; track metric.name; let i = $index) {
+                @if (i > 0) { <span aria-hidden="true">+</span> }
+                <span class="formula-term">{{ metric.effectiveWeight }} × q<sub>{{ i + 1 }}</sub></span>
+              }
+            </div>
+            <p>Each <b>q</b> is a quality value from 0 to 1. The weights above are the effective weights recorded in this run.</p>
+            <ol class="score-definitions">
+              @for (metric of run().objective!.metrics; track metric.name; let i = $index) {
+                <li>
+                  <strong [title]="metric.name">{{ parameterLabel(metric.name) }}</strong> · {{ metric.direction === 'minimize' ? 'Lower is better' : 'Higher is better' }}
+                  <p class="normalization-formula">q{{ i + 1 }} = {{ normalizationLabel(metric, i) }}</p>
+                  <p>m{{ i + 1 }} = mean of <code>{{ metric.name }}</code> over the configuration’s required contexts, in the original metric units.</p>
+                </li>
+              }
+            </ol>
+            <p><code>clamp(x, 0, 1)</code> limits x to the interval [0, 1]. A success rate uses a fraction (0.75 for 75%); a duration keeps its original unit, such as milliseconds.</p>
+          } @else {
+            <p>The trace does not describe a structured objective. Observed scores come from the trace; the reference uses legacy success minus p95 duration, checked against shared configurations. The actual objective cannot be confirmed from these metadata.</p>
+          }
+          @if (evaluation().referenceCompatible) {
+            <p><span class="term-help" tabindex="0" [pTooltip]="metricHelp.reference" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Reference best</span>: {{ formatOutcomeMetric(evaluation().referenceBestScore) }}. <span class="term-help" tabindex="0" [pTooltip]="metricHelp.relativeGap" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Relative gap</span>: {{ formatRelativeGap(evaluation().relativeGap) }}.</p>
+            @if ((evaluation().referenceBestScore ?? 0) > 0) {
+              @for (quality of evaluation().qualityThresholds; track quality.threshold) { <p>{{ quality.threshold * 100 }}% of reference: {{ quality.reachedAtDecision === undefined ? 'Not reached' : 'Reached at Decision #' + quality.reachedAtDecision }}</p> }
+            } @else { <p>Percentage milestones are unavailable for a non-positive reference score.</p> }
+          }
+        </details>
         <app-search-progress />
+        @if (bestDecision(); as best) {
+          <section class="search-outcome">
+            <div class="outcome-heading"><h2>Best configuration found</h2><p-button label="Investigate this decision" (onClick)="investigate(best.decision)" [outlined]="true" /></div>
+            @for (connector of best.configuration.connectors; track connector.name) {
+              <h3>{{ connector.source }} → {{ connector.destination }}</h3><p>{{ connector.strategy }}</p>
+              <dl class="configuration-params">@for (parameter of connector.parameters; track parameter.path) { <div><dt [title]="parameter.path">{{ parameterLabel(parameter.path) }}</dt><dd>{{ parameter.value }}</dd></div> }</dl>
+            }
+            <p class="provenance">Best observed under this objective and these contexts; not proof of a global optimum.</p>
+          </section>
+        }
+      } @else {
+        <app-search-progress /><app-decision-timeline />
+        <div class="investigation-grid">
+          <section>
+            <div class="context-controls">
+              <h2><span class="term-help" tabindex="0" [pTooltip]="metricHelp.context" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Operational context</span></h2>
+              @if (compactContext(); as label) { <p>{{ label }}</p> }
+              @if (showWorkloadFilter()) { <label>Workload <p-select [options]="workloadOptions()" optionLabel="label" optionValue="value" [ngModel]="state.workloadUsers()" (ngModelChange)="state.workloadUsers.set($event)" ariaLabel="Workload" /></label> }
+              @if (showFaultFilter()) { <label>Fault rate <p-select [options]="faultOptions()" optionLabel="label" optionValue="value" [ngModel]="state.faultPercentage()" (ngModelChange)="state.faultPercentage.set($event)" ariaLabel="Fault rate" /></label> }
+              <p class="provenance">Filters affect scenario metrics below. Configuration scores and search progress cover all required contexts.</p>
+            </div>
+            <app-result-space />
+          </section>
+          <app-decision-details />
+        </div>
+        <details class="search-outcome"><summary>Best values per metric across evaluated configurations</summary>
+          <p>Success and duration are independent optima and may belong to different configurations.</p>
+          <div class="table-scroll"><table><thead><tr><th>Context</th><th>Best success</th><th>Reference success</th><th><span class="term-help" tabindex="0" [pTooltip]="metricHelp.p95" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Lowest p95</span></th><th>Reference p95</th></tr></thead><tbody>
+            @for (context of evaluation().contextEvaluations; track context.context) { <tr><td>{{ context.context }}</td><td>{{ formatContextSuccessRate(context.heuristicSuccessRate) }}</td><td>{{ formatContextSuccessRate(context.referenceSuccessRate) }}</td><td>{{ formatContextDuration(context.heuristicP95) }}</td><td>{{ formatContextDuration(context.referenceP95) }}</td></tr> }
+          </tbody></table></div>
+        </details>
       }
-    </div>
-
-    @if (run().kind === 'heuristic') {
-      <app-decision-timeline />
-      <app-decision-details />
-    } @else {
-      <app-legacy-results [results]="state.visibleResults()" />
-    }
+    } @else { <app-result-space /><app-legacy-results [results]="state.visibleResults()" /> }
   </main>
 </div>

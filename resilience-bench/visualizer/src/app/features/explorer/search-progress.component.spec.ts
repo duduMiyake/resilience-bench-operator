@@ -34,6 +34,25 @@ describe('SearchProgressComponent selection', () => {
     state.selectDecision(3);
     expect(fixture.componentInstance.data().datasets.find((dataset) => dataset.label === 'Selected Decision')?.data).toEqual([null, null, 0.3]);
   });
+  it('renders discrete observations and derives the best from official scores', () => {
+    const run = normalizer.normalize(trace());
+    run.decisions[1].aggregatedResult!.score = 0.05;
+    run.decisions[1].aggregatedResult!.currentScore = 99;
+    state.setRun(run);
+    const datasets = fixture.componentInstance.data().datasets;
+    expect(datasets.find(d => d.label === 'Observed Score')?.showLine).toBe(false);
+    expect(datasets.find(d => d.label === 'Best Score So Far')?.stepped).toBe('after');
+    expect(fixture.componentInstance.bestScores()).toEqual([0.1, 0.1, 0.3]);
+  });
+  it('places the accessible table outside the compact header', () => {
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.panel-heading table')).toBeNull();
+    expect(element.querySelectorAll('.score-table tbody tr')).toHaveLength(3);
+    expect(element.querySelectorAll('.score-table thead th')).toHaveLength(4);
+    (element.querySelectorAll('.score-table tbody button')[1] as HTMLButtonElement).click();
+    expect(state.selectedDecisionNumber()).toBe(2);
+  });
 });
 
 function trace(): Record<string, unknown> {

@@ -106,10 +106,10 @@ export class RunEvaluationService {
 
     evaluation.referenceBestScore = referenceBestScore;
     evaluation.absoluteGap = referenceBestScore - evaluation.bestObservedScore;
-    evaluation.relativeGap = referenceBestScore === 0
+    evaluation.relativeGap = referenceBestScore <= 0
       ? undefined
       : evaluation.absoluteGap / referenceBestScore * 100;
-    evaluation.qualityThresholds = QUALITY_THRESHOLDS.map((threshold) => ({
+    evaluation.qualityThresholds = referenceBestScore <= 0 ? [] : QUALITY_THRESHOLDS.map((threshold) => ({
       threshold,
       reachedAtDecision: firstReachedDecision(scoredDecisions, referenceBestScore * threshold),
     }));

@@ -1,18 +1,21 @@
+import { TooltipModule } from 'primeng/tooltip';
+import { metricHelp } from '../../core/models/metric-help';
 import { ChangeDetectionStrategy, Component, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ChartData, ChartOptions, Point } from 'chart.js';
+import { ChartData, ChartOptions, Point, Plugin } from 'chart.js';
 import { ChartModule, UIChart } from 'primeng/chart';
 import { ButtonModule } from 'primeng/button';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { NormalizedResult } from '../../core/models/visualizer.models';
 import { ExplorerStateService, isInitialDecision } from '../../core/services/explorer-state.service';
+import { successPercent, displayNumber } from '../../core/models/display';
 import { ParetoService } from '../../core/services/pareto.service';
 
 interface ResultPoint extends Point {
   scenario: string;
   decision?: number;
-  phase?: 'Initial Sample' | 'Adaptive Search';
+  phase?: 'Initial Sample' | 'Adaptive Search' | 'Random sample';
   observedScore?: number;
   improvedBest?: boolean;
   pareto?: boolean;
@@ -25,59 +28,60 @@ interface ChartSelectEvent {
 
 @Component({
   selector: 'app-result-space',
-  imports: [FormsModule, ButtonModule, ChartModule, ToggleSwitchModule],
+  imports: [TooltipModule, FormsModule, ButtonModule, ChartModule, ToggleSwitchModule],
   template: `
     <section class="chart-panel">
       <div class="panel-heading">
         <div>
-          <h2 class="section-heading">Result Space</h2>
+          <h2 class="section-heading"><span class="term-help" tabindex="0" [pTooltip]="metricHelp.p95" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Success × response time (p95)</span></h2>
           <p>Checkout success versus p95 latency for the selected operational context.</p>
         </div>
         <div class="panel-tools">
-          <div class="view-toggles" aria-label="Chart visibility options">
-            <label class="path-toggle">
-            <p-toggleswitch [ngModel]="state.showSearchPath()" (ngModelChange)="state.showSearchPath.set($event)" ariaLabel="Show Search Path" />
-            <span>Show Search Path</span>
-          </label>
+          <details><summary>Chart layers and zoom</summary><div class="view-toggles" aria-label="Chart visibility options">
+
           <label class="path-toggle">
             <p-toggleswitch [ngModel]="showReference()" (ngModelChange)="showReference.set($event)" ariaLabel="Show Reference" />
-            <span>Show Reference</span>
+            <span class="term-help" tabindex="0" [pTooltip]="metricHelp.reference" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Show Reference</span>
           </label>
           <label class="path-toggle">
             <p-toggleswitch [ngModel]="showPareto()" (ngModelChange)="showPareto.set($event)" ariaLabel="Show Pareto" />
-            <span>Show Pareto</span>
+            <span class="term-help" tabindex="0" [pTooltip]="metricHelp.pareto" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Show Pareto</span>
           </label>
           <label class="path-toggle">
             <p-toggleswitch [ngModel]="autoFocusSelected()" (ngModelChange)="autoFocusSelected.set($event)" ariaLabel="Auto-focus selected" />
             <span>Auto-focus selected</span>
           </label>
           </div>
-          <div class="decision-navigation" aria-label="Decision navigation">
-            <p-button icon="pi pi-chevron-left" severity="secondary" [text]="true" [disabled]="!hasPreviousDecision()" ariaLabel="Previous decision" (onClick)="state.selectPrevious()" />
-            <span>Decision {{ selectedPosition() }} of {{ state.visibleDecisions().length }}</span>
-            <p-button icon="pi pi-chevron-right" severity="secondary" [text]="true" [disabled]="!hasNextDecision()" ariaLabel="Next decision" (onClick)="state.selectNext()" />
-          </div>
           <div class="chart-actions">
             <p-button class="chart-action" label="Focus Selected" severity="secondary" [outlined]="true" [disabled]="!selectedPoint()" (onClick)="focusSelected()" />
-            <p-button class="chart-action" label="Reset Zoom" severity="secondary" [text]="true" (onClick)="resetZoom()" />
+            <p-button class="chart-action" label="Reset Zoom" severity="secondary" [outlined]="true" (onClick)="resetZoom()" />
           </div>
-          <div class="legend" aria-label="Legend">
-            <span><i class="reference"></i>Reference Space</span>
-            <span><i class="pareto"></i>Pareto Frontier</span>
-            <span><i class="pareto-evaluated"></i>Pareto Evaluated</span>
-            <span><i class="path"></i>Search Path</span>
-            <span><i class="start"></i>Start</span>
-            <span><i class="selected"></i>Current Decision</span>
-            <span><i class="best-found"></i>Best Found</span>
-            <span><i class="end"></i>End</span>
-          </div>
+          </details>
         </div>
       </div>
+      <div class="trajectory-controls">
+        <label><input type="checkbox" [checked]="state.showSearchPath()" (change)="state.showSearchPath.set($any($event.target).checked)" /> Follow decision path</label>
+        @if (state.showSearchPath()) { <label><input type="checkbox" [checked]="showFullPath()" (change)="showFullPath.set($any($event.target).checked)" /> Complete path in background</label> }
+        <p-button label="Previous decision" [outlined]="true" [disabled]="!hasPreviousDecision()" (onClick)="state.selectPrevious()" />
+        <span>Decision {{ state.selectedDecisionNumber() ?? '—' }} / {{ state.visibleDecisions().length }}</span>
+        <p-button label="Next decision" [outlined]="true" [disabled]="!hasNextDecision()" (onClick)="state.selectNext()" />
+      </div>
+      @if (state.showSearchPath() && singleContext()) {
+        <div class="decision-route" aria-label="Decision path">
+          @for (step of routeSteps(); track step.label) {
+            <button class="rb-button" [class.current]="step.label === 'Current'" [disabled]="!step.decision" (click)="state.selectDecision(step.decision!)">
+              <small>{{ step.label }}</small>
+              <strong>{{ step.decision === undefined ? 'End of path' : 'Decision #' + step.decision }}</strong>
+              <span>{{ step.point ? successPercent(step.point.x) + ' success · ' + displayNumber(step.point.y) + ' ms' : step.decision === undefined ? 'No further decision' : 'No result for this context' }}</span>
+            </button>
+          }
+        </div>
+        <p class="chart-note">Arrows show selection order, not KNN similarity. The next decision is shown for retrospective analysis. Coincident points retain their measured positions; use the numbered cards to inspect them.</p>
+      } @else if (state.showSearchPath()) {
+        <p class="chart-note">Choose one operational context to follow the path. Connections are hidden while different contexts are combined.</p>
+      }
       @if (hasPoints()) {
-        <div class="chart-frame">
-          <span class="better-x">Better -&gt;</span>
-          <span class="better-y">Better down</span>
-          <span class="preferred-zone">Preferred region</span>
+        <div class="chart-frame result-frame">
           <p-chart #resultChart type="scatter" [data]="data()" [options]="options" [plugins]="chartPlugins" height="100%" ariaLabel="Result Space" (onDataSelect)="selectPoint($event)" />
         </div>
       } @else {
@@ -89,13 +93,27 @@ interface ChartSelectEvent {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ResultSpaceComponent {
+  readonly metricHelp = metricHelp;
   readonly state = inject(ExplorerStateService);
   private readonly paretoService = inject(ParetoService);
   readonly showReference = signal(true);
-  readonly showPareto = signal(true);
+  readonly showPareto = signal(false);
   @ViewChild('resultChart') chart?: UIChart;
   readonly autoFocusSelected = signal(false);
-  readonly chartPlugins = [zoomPlugin];
+  readonly showFullPath = signal(false);
+  readonly successPercent = successPercent;
+  readonly displayNumber = displayNumber;
+  readonly singleContext = computed(() => new Set([...this.state.visibleResults(), ...this.state.visibleReferenceResults()].map(r => JSON.stringify([r.workloadName, r.workloadUsers, r.faultProvider, r.faultPercentage, [...r.faultServices].sort()]))).size === 1);
+  readonly routeSteps = computed(() => {
+    const index = this.state.selectedDecisionIndex();
+    const decisions = this.state.visibleDecisions();
+    const points = this.state.searchPath();
+    return ['Previous', 'Current', 'Next'].map((label, offset) => {
+      const decision = index < 0 ? undefined : decisions[index + offset - 1]?.decision;
+      return { label, decision, point: points.find(p => p.decision === decision) };
+    });
+  });
+  readonly chartPlugins = [zoomPlugin, decisionPathAnnotations];
   readonly selectedPosition = computed(() => Math.max(0, this.state.selectedDecisionIndex() + 1));
   readonly hasPreviousDecision = computed(() => this.state.selectedDecisionIndex() > 0);
   readonly hasNextDecision = computed(() => {
@@ -112,8 +130,9 @@ export class ResultSpaceComponent {
 
   readonly data = computed<ChartData<'scatter', ResultPoint[]>>(() => {
     const path = this.state.searchPath();
+    const singleContext = this.singleContext();
     const pathPoints = path.map((point) => this.pathPoint(point));
-    const frontier = this.paretoService.frontier(this.state.visibleReferenceResults());
+    const frontier = singleContext ? this.paretoService.frontier(this.state.visibleReferenceResults()) : [];
 
     const datasets: ChartData<'scatter', ResultPoint[]>['datasets'] = [
       ...(this.showReference() ? [{
@@ -121,8 +140,9 @@ export class ResultSpaceComponent {
         data: this.toPoints(this.state.visibleReferenceResults()),
         backgroundColor: this.state.showSearchPath() ? 'rgba(152, 162, 179, 0.18)' : 'rgba(152, 162, 179, 0.35)',
         borderColor: this.state.showSearchPath() ? 'rgba(102, 112, 133, 0.28)' : 'rgba(102, 112, 133, 0.45)',
-        pointRadius: 3,
-        pointHoverRadius: 5,
+        pointRadius: this.state.showSearchPath() ? 1.5 : 3,
+        pointHoverRadius: 3,
+        order: 10,
       }] : []),
     ];
 
@@ -141,33 +161,24 @@ export class ResultSpaceComponent {
       });
     }
 
-    if (this.state.showSearchPath()) {
-      datasets.push({
-        label: 'Search Path',
-        data: pathPoints,
-        borderColor: 'rgba(8, 127, 91, 0.45)',
-        backgroundColor: 'rgba(8, 127, 91, 0.1)',
-        borderWidth: 1.5,
-        segment: {
-          borderColor: (context) => {
-            const progress = (context.p1DataIndex + 1) / Math.max(pathPoints.length, 1);
-            return 'rgba(8, 127, 91, ' + (0.08 + progress * 0.55) + ')';
-          },
-        },
-        pointBackgroundColor: (context) => {
-          const progress = (context.dataIndex + 1) / Math.max(pathPoints.length, 1);
-          const color = (context.raw as ResultPoint).phase === 'Initial Sample' ? '37, 99, 165' : '8, 127, 91';
-          return 'rgba(' + color + ', ' + (0.25 + progress * 0.75) + ')';
-        },
-        pointRadius: 3.5,
-        pointHoverRadius: 6,
-        pointStyle: (context) => (context.raw as ResultPoint).phase === 'Initial Sample' ? 'circle' : 'rectRot',
-        showLine: true,
-        spanGaps: false,
-        tension: 0,
-      });
+    if (this.state.showSearchPath() && singleContext) {
+      if (this.showFullPath()) datasets.push({ label: 'Complete path', data: pathPoints, borderColor: 'rgba(102,112,133,.18)', borderWidth: 1, pointRadius: 0, pointHitRadius: 0, showLine: true, order: 5 });
+      // Do not bridge a decision whose result is absent in this context.
+      const steps = this.routeSteps();
+      for (let i = 0; i < 2; i++) {
+        const from = steps[i].point, to = steps[i + 1].point;
+        if (from && to) datasets.push({
+          label: i === 0 ? 'Incoming decision' : 'Outgoing decision',
+          data: [this.pathPoint(from), this.pathPoint(to)],
+          borderColor: i === 0 ? '#2563a5' : '#c2410c',
+          borderWidth: 3, pointRadius: 6, pointHoverRadius: 9,
+          backgroundColor: i === 0 ? '#2563a5' : '#c2410c',
+          showLine: true, tension: 0, order: -5,
+        });
+      }
     }
-    const paretoPoints = pathPoints.filter((point) => point.pareto);
+    datasets.push({ label: 'Evaluated configurations', data: this.toPoints(this.state.visibleResults()), backgroundColor: this.state.showSearchPath() ? 'rgba(8,127,91,.25)' : '#087f5b', pointRadius: this.state.showSearchPath() ? 3 : 4, pointHoverRadius: 7, order: 2 });
+    const paretoPoints = singleContext ? pathPoints.filter((point) => point.pareto) : [];
     if (this.showPareto() && paretoPoints.length > 0) {
       datasets.push({
         label: 'Pareto Evaluated',
@@ -181,7 +192,7 @@ export class ResultSpaceComponent {
       });
     }
 
-    for (const role of ['Start', 'Best Found', 'End', 'Current Decision']) {
+    for (const role of ['Best Found', 'Current Decision']) {
       const points = pathPoints.filter((point) => this.markerRole(point) === role);
       if (points.length > 0) {
         datasets.push(this.markerDataset(role, points));
@@ -200,7 +211,7 @@ export class ResultSpaceComponent {
     parsing: false,
     interaction: { mode: 'nearest', intersect: false },
     plugins: {
-      legend: { display: false },
+      legend: { display: true, position: 'bottom', labels: { usePointStyle: true } },
       tooltip: {
         callbacks: {
           label: (context) => {
@@ -236,9 +247,9 @@ export class ResultSpaceComponent {
       },
     },
     scales: {
-      x: { title: { display: true, text: 'Checkout Success Rate' }, grid: { color: '#eaecf0' } },
+      x: { title: { display: true, text: 'Checkout success (%) — higher is better' }, ticks: { callback: (value) => `${(Number(value) * 100).toFixed(0)}%` }, grid: { color: '#eaecf0' } },
       y: {
-        title: { display: true, text: 'p95 Iteration Duration (ms)' },
+        title: { display: true, text: 'Response time p95 (ms) — lower is better' },
         grid: { color: '#eaecf0' },
         ticks: { callback: (value) => formatMilliseconds(Number(value)) },
       },
@@ -293,8 +304,8 @@ export class ResultSpaceComponent {
           y: result.iterationDurationP95!,
           scenario: result.scenario,
           decision: result.joinedDecision,
-          phase: decision ? (isInitialDecision(decision) ? 'Initial Sample' : 'Adaptive Search') : undefined,
-          observedScore: decision ? decision.aggregatedResult?.currentScore ?? decision.aggregatedResult?.score : undefined,
+          phase: decision ? (this.state.run()?.strategy === 'randomSampling' ? 'Random sample' : isInitialDecision(decision) ? 'Initial Sample' : 'Adaptive Search') : undefined,
+          observedScore: decision ? decision.aggregatedResult?.score ?? decision.aggregatedResult?.currentScore : undefined,
           improvedBest: decision?.aggregatedResult?.improvedBest,
         };
       });
@@ -306,7 +317,7 @@ export class ResultSpaceComponent {
       y: point.y,
       scenario: `Decision #${point.decision}`,
       decision: point.decision,
-      phase: point.phase === 'initial' ? 'Initial Sample' : 'Adaptive Search',
+      phase: this.state.run()?.strategy === 'randomSampling' ? 'Random sample' : point.phase === 'initial' ? 'Initial Sample' : 'Adaptive Search',
       observedScore: point.observedScore,
       improvedBest: point.improvedBest,
       pareto: point.pareto,
@@ -332,7 +343,7 @@ export class ResultSpaceComponent {
       : role === 'Best Found'
         ? { backgroundColor: '#fef3c7', borderColor: '#b45309', pointBorderWidth: 3, pointRadius: 8, pointHoverRadius: 10, pointStyle: 'triangle' }
         : { backgroundColor: '#e0f2fe', borderColor: '#2563a5', pointBorderWidth: 3, pointRadius: 7, pointHoverRadius: 9, pointStyle: 'circle' };
-    return { label: role, data: points, ...style };
+    return { label: role, data: points, ...style, order: -10 };
   }
 
   private markerRole(point: ResultPoint): string | undefined {
@@ -366,3 +377,40 @@ function formatPercent(value: number): string {
 function formatMilliseconds(value: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
 }
+
+const decisionPathAnnotations: Plugin<'scatter'> = {
+  id: 'decision-path-annotations',
+  afterDatasetsDraw(chart) {
+    const { ctx, chartArea } = chart;
+    const labeled = new Set<number>();
+    ctx.save(); ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height); ctx.clip();
+    chart.data.datasets.forEach((dataset, index) => {
+      if (!['Incoming decision', 'Outgoing decision'].includes(dataset.label ?? '') || !chart.isDatasetVisible(index)) return;
+      const meta = chart.getDatasetMeta(index), [from, to] = meta.data;
+      if (!from || !to) return;
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const color = dataset.label === 'Incoming decision' ? '#2563a5' : '#c2410c';
+      if (Math.hypot(dx, dy) > 24) {
+        const angle = Math.atan2(dy, dx), x = from.x + dx * .65, y = from.y + dy * .65;
+        ctx.beginPath(); ctx.moveTo(x, y);
+        ctx.lineTo(x - 10 * Math.cos(angle - .5), y - 10 * Math.sin(angle - .5));
+        ctx.lineTo(x - 10 * Math.cos(angle + .5), y - 10 * Math.sin(angle + .5));
+        ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+      }
+      meta.data.forEach((element, pointIndex) => {
+        const point = dataset.data[pointIndex] as ResultPoint;
+        if (point.decision === undefined || labeled.has(point.decision)) return;
+        labeled.add(point.decision);
+        const label = '#' + point.decision;
+        ctx.font = '600 13px sans-serif';
+        const width = ctx.measureText(label).width + 12;
+        const x = Math.max(chartArea.left, Math.min(element.x + 12, chartArea.right - width));
+        const y = Math.max(chartArea.top + 20, Math.min(element.y - 12, chartArea.bottom));
+        ctx.fillStyle = 'rgba(255,255,255,.96)'; ctx.fillRect(x, y - 18, width, 22);
+        ctx.fillStyle = color; ctx.fillText(label, x + 6, y - 2);
+      });
+    });
+    ctx.restore();
+  },
+};

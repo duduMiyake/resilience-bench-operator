@@ -38,6 +38,22 @@ describe('ExplorerComponent Search Outcome', () => {
     expect(component.formatContextDuration(undefined)).toBe('—');
     expect(component.formatSuccessGap(undefined, 0.9)).toBe('—');
   });
+  it('renders the recorded weights and direction-aware normalization formulas', () => {
+    const run = normalizer.normalize(trace([0.75], 20));
+    run.objective = { format: 'structured', metrics: [
+      { name: 'checkout_success_rate', direction: 'maximize', effectiveWeight: 0.5, normalization: { type: 'minMax', min: 0, max: 1 } },
+      { name: 'iteration_duration_p(95)', direction: 'minimize', effectiveWeight: 0.5, normalization: { type: 'reciprocal', scale: 22450 } },
+    ] };
+    fixture.componentRef.setInput('run', run);
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.score-formula')?.textContent).toContain('Score =');
+    expect(element.querySelectorAll('.formula-term')).toHaveLength(2);
+    expect(element.querySelector('.score-definitions')?.textContent).toContain('22450 / (22450 + m2)');
+    const component = fixture.componentInstance;
+    expect(component.normalizationLabel(run.objective.metrics[0])).toBe('clamp((m1 − 0) / (1 − 0), 0, 1)');
+    expect(component.normalizationLabel({ ...run.objective.metrics[0], direction: 'minimize' })).toBe('clamp((1 − m1) / (1 − 0), 0, 1)');
+  });
 
   it('summarizes a compatible comparison and exact matches', () => {
     fixture.componentRef.setInput('run', normalizer.normalize(trace([0.975], 20), undefined, reference(0.975, 0.9763)));
@@ -53,8 +69,8 @@ describe('ExplorerComponent Search Outcome', () => {
 
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('Score = Checkout Success Rate − p95 Iteration Duration');
-    expect(text).toContain('theoretical maximum score is 1');
+    expect(text).toContain('The trace does not describe a structured objective');
+    expect(text).not.toContain('theoretical maximum score is 1');
     expect(text).not.toContain('Reference Comparison');
     expect(text).not.toContain('Reference Best');
   });

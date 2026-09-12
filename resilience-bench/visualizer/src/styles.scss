@@ -42,6 +42,28 @@ button,
 input {
   font: inherit;
 }
+button:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid var(--rb-info); outline-offset: 3px; }
+.rb-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: .55rem .9rem;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--rb-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.rb-button:hover:not(:disabled) { background: var(--rb-accent-soft); border-color: var(--rb-accent); }
+.rb-button:active:not(:disabled) { background: #c9eddf; }
+.rb-button:disabled { opacity: .5; cursor: not-allowed; }
+summary { cursor: pointer; padding: .5rem 0; font-weight: 600; }
+.table-scroll { overflow-x: auto; }
+.details-panel table { border-collapse: collapse; width: 100%; font-size: .8rem; }
+.details-panel th, .details-panel td { padding: .5rem; text-align: left; overflow-wrap: anywhere; border-bottom: 1px solid var(--rb-border); }
+.details-panel .changed { background: var(--rb-accent-soft); }
 
 .p-card {
   border: 1px solid var(--rb-border);
@@ -75,6 +97,9 @@ input {
 .muted {
   color: var(--rb-muted);
 }
+.term-help { cursor: help; text-decoration: underline dotted; text-underline-offset: 4px; }
+.term-help:focus-visible { outline: 3px solid var(--rb-info); outline-offset: 4px; border-radius: 2px; }
+.p-tooltip .p-tooltip-text { font-size: .85rem; line-height: 1.5; }
 
 .empty-state {
   display: grid;

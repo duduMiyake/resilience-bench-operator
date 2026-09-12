@@ -97,3 +97,16 @@ npm run build
 
 Todo o processamento ocorre localmente no navegador; os arquivos nao sao
 enviados para um servidor.
+
+## Exemplos carregados automaticamente
+
+Ao iniciar com `npm start`, o visualizador abre KNN usando os arquivos de
+`execuções/KNN` e a referencia de `execuções/Exhaustive`. A navegacao permite
+abrir RandomSampling ou comparar os dois exemplos sem selecionar arquivos.
+Recarregar a pagina volta a carregar KNN. A opcao `Open local files` continua
+disponivel para outras execucoes.
+
+O Angular serve os JSON diretamente como assets; arquivos `Zone.Identifier`
+nao sao incluidos. Para atualizar um exemplo, substitua os respectivos JSON
+na pasta `execuções`. O build de producao inclui esses datasets e deve ser
+regerado quando eles mudarem.

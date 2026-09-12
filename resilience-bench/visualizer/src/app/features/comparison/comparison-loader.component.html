@@ -21,7 +21,7 @@
                 <span class="field-hint">Trace + run results</span>
               </div>
               @if (runs().length > 2) {
-                <p-button icon="pi pi-trash" severity="danger" [text]="true" ariaLabel="Remove run" (onClick)="removeRun(index)" />
+                <p-button icon="pi pi-trash" severity="danger" [outlined]="true" ariaLabel="Remove run" (onClick)="removeRun(index)" />
               }
             </div>
             <div class="file-grid two">

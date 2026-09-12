@@ -2,12 +2,23 @@
   <h2 class="section-heading">Decision Details</h2>
 
   @if (state.selectedDecision(); as decision) {
+    <button class="rb-button" (click)="pinned.set(decision)">Pin configuration for comparison</button>
+    @if (pinned(); as previous) {
+      <section class="details-section">
+        <h3>Decision {{ previous.decision }} vs {{ decision.decision }}</h3>
+        <button class="rb-button" (click)="pinned.set(null)">Clear comparison</button>
+        <p>Observed scores: {{ value(previous.aggregatedResult?.score) }} vs {{ value(decision.aggregatedResult?.score) }}</p>
+        <div class="table-scroll"><table><thead><tr><th>Parameter</th><th>Pinned</th><th>Selected</th></tr></thead><tbody>
+          @for (row of parameterComparison(); track row.path) { <tr [class.changed]="row.pinned !== row.selected"><td [title]="row.path">{{ parameterLabel(row.path) }}<small>{{ row.path.split('.').slice(0, -1).join(' · ') }}</small></td><td>{{ row.pinned }}</td><td>{{ row.selected }}</td></tr> }
+        </tbody></table></div>
+      </section>
+    }
     <div class="decision-title">
       <div>
         <span class="decision-index">Decision {{ decision.decision }}</span>
-        <h3>{{ decision.configuration.summary }}</h3>
+        <h3>Configuration {{ decision.configuration.hash?.slice(0, 8) ?? decision.decision }}</h3>
       </div>
-      <p-tag [value]="decision.selectionMode === 'INITIAL_BATCH' ? 'Initial Sample' : 'Adaptive Search'" [severity]="decision.selectionMode === 'INITIAL_BATCH' ? 'info' : 'success'" />
+      <p-tag [value]="state.run()?.strategy === 'randomSampling' ? 'Random sample' : isInitial(decision) ? 'Initial Sample' : 'Adaptive Search'" [severity]="decision.selectionMode === 'INITIAL_BATCH' ? 'info' : 'success'" />
     </div>
 
     <section class="explanation-card">
@@ -19,12 +30,15 @@
           <b>+</b>
           <div><span title="{{ metadataTooltip('explorationBonus') }}">Exploration Bonus</span><strong>{{ metadataValue('explorationBonus') }}</strong></div>
           <b>=</b>
-          <div><span title="{{ metadataTooltip('selectionScore') }}">Selection Score</span><strong>{{ metadataValue('selectionScore') }}</strong></div>
+          <div><span title="{{ metadataTooltip('selectionScore') }}">Selection priority</span><strong>{{ metadataValue('selectionScore') }}</strong></div>
         </div>
       }
       <p class="best-message" [class.new]="decision.aggregatedResult?.improvedBest">{{ bestStatus(decision) }}</p>
     </section>
 
+    <section class="details-section"><h3>Observed result</h3><p>Score: {{ value(decision.aggregatedResult?.score) }} · Best so far: {{ value(decision.aggregatedResult?.bestScoreSoFar) }}</p>
+      <div class="table-scroll"><table><thead><tr><th>Context</th><th>Success rate</th><th>Response time p95 (ms)</th></tr></thead><tbody>@for (result of decision.joinedResults; track result.scenario) { <tr><td>{{ contextLabel(result) }}</td><td>{{ successPercent(result.checkoutSuccessRate) }}</td><td>{{ displayNumber(result.iterationDurationP95) }}</td></tr> }</tbody></table></div>
+    </section>
     <section class="details-section">
       <h3>Configuration Overview</h3>
       @if (decision.configuration.connectors.length) {

@@ -8,6 +8,7 @@
       </div>
     </div>
     <div class="header-actions">
+      <p-button label="Export analysis" icon="pi pi-download" [outlined]="true" (onClick)="exportAnalysis()" />
       <p-button label="Load Another Comparison" icon="pi pi-folder-open" severity="secondary" [outlined]="true" (onClick)="loadAnother.emit()" />
     </div>
   </header>
@@ -28,15 +29,20 @@
     </section>
 
     <section class="chart-panel">
+      <div class="panel-heading"><div><h2 class="section-heading"><span class="term-help" tabindex="0" [pTooltip]="metricHelp.convergence" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Convergence</span></h2><p>How quickly did each heuristic approach its best result?</p></div></div>
+      <div class="chart-frame compact"><p-chart #convergenceChart type="line" [data]="convergenceData()" [options]="convergenceOptions" height="100%" ariaLabel="Comparison Convergence" /></div>
+      <button class="rb-button" (click)="exportChart()">Export chart (PNG)</button>
+    </section>
+    <details class="chart-panel"><summary>Investigate success × response time</summary>
       <div class="panel-heading">
         <div><h2 class="section-heading">Result Space</h2><p>How did the heuristics explore the result space?</p></div>
         <div class="panel-tools">
           <label>Focus Run <p-select [options]="model().runs" optionLabel="label" optionValue="id" [ngModel]="focusedRunId()" (ngModelChange)="focusedRunId.set($event)" ariaLabel="Focus Run" /></label>
           <label>Operational Context <p-select [options]="contextOptions()" optionLabel="label" optionValue="value" [ngModel]="contextKey()" (ngModelChange)="contextKey.set($event)" ariaLabel="Operational Context" /></label>
-          <label class="chart-toggle"><input type="checkbox" [checked]="showReference()" (change)="showReference.set($any($event.target).checked)" /> Reference</label>
-          <label class="chart-toggle"><input type="checkbox" [checked]="showPareto()" (change)="showPareto.set($any($event.target).checked)" /> Pareto</label>
+          <label class="chart-toggle"><input type="checkbox" [checked]="showReference()" (change)="showReference.set($any($event.target).checked)" /> <span class="term-help" tabindex="0" [pTooltip]="metricHelp.reference" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Reference</span></label>
+          <label class="chart-toggle"><input type="checkbox" [checked]="showPareto()" (change)="showPareto.set($any($event.target).checked)" /> <span class="term-help" tabindex="0" [pTooltip]="metricHelp.pareto" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Pareto</span></label>
           <label class="chart-toggle"><input type="checkbox" [checked]="showTrajectory()" (change)="showTrajectory.set($any($event.target).checked)" /> Trajectory</label>
-          <p-button label="Reset Zoom" severity="secondary" [text]="true" (onClick)="resetZoom()" />
+          <p-button label="Reset Zoom" severity="secondary" [outlined]="true" (onClick)="resetZoom()" />
         </div>
       </div>
       <div class="run-filters" aria-label="Visible heuristics">
@@ -46,49 +52,40 @@
       </div>
       <div class="chart-frame"><p-chart #comparisonChart type="scatter" [data]="resultSpaceData()" [options]="resultSpaceOptions" [plugins]="chartPlugins" height="100%" ariaLabel="Comparison Result Space" /></div>
       <p class="chart-note">The exhaustive reference appears once as a low-emphasis background. The Pareto frontier is shown for the selected context; highlighted heuristic points were evaluated on that frontier. Only {{ focusedRun()?.label }} shows its complete trajectory.</p>
-    </section>
-
-    <section class="chart-panel">
-      <div class="panel-heading"><div><h2 class="section-heading">Convergence</h2><p>How quickly did each heuristic approach its best result?</p></div></div>
-      <div class="chart-frame compact"><p-chart type="line" [data]="convergenceData()" [options]="convergenceOptions" height="100%" ariaLabel="Comparison Convergence" /></div>
-    </section>
+    </details>
 
     <section class="summary-panel">
-      <div class="panel-heading"><div><h2 class="section-heading">Comparison Summary</h2><p>Values reuse the existing RunEvaluationService semantics. No automatic winner is declared.</p></div></div>
+      <div class="panel-heading"><div><h2 class="section-heading">Comparison Summary</h2><p>Compare observed results at a common evaluation budget. Individual runs do not establish statistical superiority; cached results are replay, not new measurements.</p></div></div>
       <div class="table-scroll">
         <table>
           <thead><tr>
             <th title="Estratégia de seleção usada nesta execução.">Heuristic</th>
-            <th title="Quantidade de configurações de resiliência avaliadas pela heurística.">Evaluations</th>
-            <th title="Percentual do espaço total de configurações que foi explorado.">Explored</th>
-            <th title="Maior score observado pela heurística durante a execução.">Best Observed</th>
-            <th title="Maior score encontrado pela execução exhaustive de referência.">Reference Best</th>
-            <th title="Diferença entre o melhor score da referência e o melhor score observado pela heurística.">Absolute Gap</th>
-            <th title="Absolute Gap expressa como percentual do score da referência.">Relative Gap</th>
-            <th title="Número da decisão em que a heurística encontrou seu melhor score.">Best Found At</th>
-            <th title="Primeira decisão em que o melhor score acumulado atingiu 90% do score da referência.">90% Reference</th>
-            <th title="Primeira decisão em que o melhor score acumulado atingiu 95% do score da referência.">95% Reference</th>
-            <th title="Primeira decisão em que o melhor score acumulado atingiu 99% do score da referência.">99% Reference</th>
+            <th><span class="term-help" tabindex="0" [pTooltip]="metricHelp.evaluations" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Evaluations</span></th>
+            <th><span class="term-help" tabindex="0" [pTooltip]="metricHelp.observedScore" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Best Observed</span></th>
+            <th><span class="term-help" tabindex="0" [pTooltip]="metricHelp.absoluteGap" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Absolute Gap</span></th>
+            <th><span class="term-help" tabindex="0" [pTooltip]="metricHelp.bestFoundAt" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Best Found At</span></th>
           </tr></thead>
           <tbody>
             @for (run of model().runs; track run.id) {
               <tr>
                 <td><span class="run-name" [style.color]="run.color"><span class="run-symbol">{{ symbol(run.pointStyle) }}</span>{{ run.label }}</span></td>
                 <td>{{ run.evaluation.evaluatedConfigurations }}</td>
-                <td>{{ formatPercent(run.evaluation.exploredRatio) }}</td>
                 <td>{{ formatScore(run.evaluation.bestObservedScore) }}</td>
-                <td>{{ model().referenceCompatible ? formatScore(run.evaluation.referenceBestScore) : 'Not available' }}</td>
                 <td>{{ model().referenceCompatible ? formatGap(run.evaluation.absoluteGap) : 'Not available' }}</td>
-                <td>{{ model().referenceCompatible ? formatRelativeGap(run.evaluation.relativeGap) : 'Not available' }}</td>
                 <td>{{ run.evaluation.bestFoundAtDecision === undefined ? '—' : 'Evaluation #' + run.evaluation.bestFoundAtDecision }}</td>
-                <td>{{ model().referenceCompatible ? threshold(run, 0.9) : 'Not available' }}</td>
-                <td>{{ model().referenceCompatible ? threshold(run, 0.95) : 'Not available' }}</td>
-                <td>{{ model().referenceCompatible ? threshold(run, 0.99) : 'Not available' }}</td>
               </tr>
             }
           </tbody>
         </table>
       </div>
     </section>
+    <details class="summary-panel"><summary>Reference milestones and provenance</summary>
+      @for (run of model().runs; track run.id) {
+        <h3>{{ run.label }}</h3>
+        <p>Explored {{ formatPercent(run.evaluation.exploredRatio) }} · Reference {{ formatScore(run.evaluation.referenceBestScore) }} · <span class="term-help" tabindex="0" [pTooltip]="metricHelp.relativeGap" tooltipEvent="both" tooltipPosition="top" [autoHide]="false">Relative gap</span> {{ formatRelativeGap(run.evaluation.relativeGap) }}</p>
+        <p>90%: {{ threshold(run, 0.9) }} · 95%: {{ threshold(run, 0.95) }} · 99%: {{ threshold(run, 0.99) }}</p>
+        <p>{{ run.run.totalScenariosExecuted ?? '—' }} executed · {{ run.run.totalCacheHits ?? '—' }} cached · Run {{ run.run.runId }}</p>
+      }
+    </details>
   </main>
 </div>

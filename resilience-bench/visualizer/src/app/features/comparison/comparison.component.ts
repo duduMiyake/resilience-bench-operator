@@ -1,3 +1,5 @@
+import { TooltipModule } from 'primeng/tooltip';
+import { metricHelp } from '../../core/models/metric-help';
 import { ChangeDetectionStrategy, Component, ViewChild, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ChartData, ChartOptions, Point } from 'chart.js';
@@ -8,27 +10,32 @@ import { SelectModule } from 'primeng/select';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { ComparisonModel, ComparisonPoint, ComparisonRun } from '../../core/models/comparison.models';
 import { NormalizedResult } from '../../core/models/visualizer.models';
+import { downloadJson, downloadUrl } from '../../core/services/download';
 import { ParetoService } from '../../core/services/pareto.service';
 
 @Component({
   selector: 'app-comparison',
-  imports: [FormsModule, ButtonModule, ChartModule, MessageModule, SelectModule],
+  imports: [TooltipModule, FormsModule, ButtonModule, ChartModule, MessageModule, SelectModule],
   templateUrl: './comparison.component.html',
   styleUrl: './comparison.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ComparisonComponent {
+  readonly metricHelp = metricHelp;
   private readonly paretoService = inject(ParetoService);
   readonly model = input.required<ComparisonModel>();
   readonly loadAnother = output<void>();
   readonly focusedRunId = signal('');
   readonly contextKey = signal<string | null>(null);
   readonly showReference = signal(true);
-  readonly showPareto = signal(true);
-  readonly showTrajectory = signal(true);
+  exportAnalysis(): void { downloadJson('resiliencebench-comparison.json', this.model()); }
+  readonly showPareto = signal(false);
+  readonly showTrajectory = signal(false);
   readonly visibleRunIds = signal<Set<string>>(new Set());
   readonly chartPlugins = [zoomPlugin];
   @ViewChild('comparisonChart') chart?: UIChart;
+  @ViewChild('convergenceChart') convergenceChart?: UIChart;
+  exportChart(): void { const url = this.convergenceChart?.chart?.toBase64Image(); if (url) downloadUrl('convergence.png', url); }
   readonly contextOptions = computed(() => [
     { label: 'All operational contexts', value: null },
     ...this.model().contexts.map((key) => ({ label: contextLabel(this.model().runs[0]?.run.contexts.find((context) => context.key === key)?.label ?? key), value: key })),
@@ -37,7 +44,7 @@ export class ComparisonComponent {
   readonly visibleRuns = computed(() => this.model().runs.filter((run) => this.visibleRunIds().has(run.id)));
   readonly resultSpaceData = computed<ChartData<'scatter', ComparisonPoint[]>>(() => {
     const model = this.model();
-    const frontier = this.paretoService.frontier(model.referenceResults.filter((result) => this.matchesContext(result)));
+    const frontier = this.contextKey() || model.contexts.length === 1 ? this.paretoService.frontier(model.referenceResults.filter((result) => this.matchesContext(result))) : [];
     const frontierKeys = new Set(frontier.map((result) => this.paretoService.configurationKey(result)));
     const datasets: ChartData<'scatter', ComparisonPoint[]>['datasets'] = [];
     if (this.showReference()) {
@@ -80,7 +87,7 @@ export class ComparisonComponent {
       });
     }
     const focused = this.focusedRun();
-    if (focused && this.showTrajectory() && this.visibleRunIds().has(focused.id)) {
+    if ((this.contextKey() || model.contexts.length === 1) && focused && this.showTrajectory() && this.visibleRunIds().has(focused.id)) {
       const path = this.pathPoints(focused);
       datasets.push({
         label: `${focused.label} trajectory`,
@@ -93,7 +100,7 @@ export class ComparisonComponent {
         borderWidth: 2,
         showLine: true,
         spanGaps: false,
-        tension: 0.12,
+        tension: 0,
       });
     }
     return { datasets };
@@ -110,7 +117,7 @@ export class ComparisonComponent {
         pointRadius: 4,
         pointHoverRadius: 6,
         borderWidth: 2,
-        tension: 0.12,
+        stepped: 'after',
         spanGaps: false,
       };
     });
@@ -158,6 +165,7 @@ export class ComparisonComponent {
     this.visibleRunIds.set(visible);
   }
   threshold(run: ComparisonRun, target: number): string {
+    if ((run.evaluation.referenceBestScore ?? 0) <= 0) return 'Unavailable';
     return run.evaluation.qualityThresholds.find((item) => item.threshold === target)?.reachedAtDecision === undefined
       ? 'Not reached'
       : `Evaluation #${run.evaluation.qualityThresholds.find((item) => item.threshold === target)!.reachedAtDecision}`;
