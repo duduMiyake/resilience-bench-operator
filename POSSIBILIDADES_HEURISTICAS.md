@@ -7,15 +7,10 @@ Este arquivo funciona como backlog de ideias. A documentacao do comportamento at
 - `exhaustive`: executa todos os cenarios gerados.
 - `randomSampling`: escolhe uma amostra fixa e reprodutivel.
 - `knnAdaptive`: escolhe amostras iniciais espalhadas e depois prioriza novos cenarios com k-NN, score objetivo e bonus de exploracao.
+- Cache/replay por cenario: `Benchmark.spec.resultCache`, modo `readWrite`, busca por hash e gravacao apos execucao real.
+- Backfill de cache a partir de resultados antigos, com metadados suficientes. Configuracao e limites em [resultados e cache](docs/resultados-e-cache.md).
 
 ## Proximas melhorias
-
-- Cache/replay de resultados por cenario:
-  - configurar em `Benchmark.spec.resultCache`;
-  - usar modo `readWrite`;
-  - buscar resultado por hash estavel da configuracao;
-  - executar e salvar no cache quando o resultado ainda nao existir;
-  - permitir backfill a partir de um exhaustive antigo.
 
 - Avaliador offline para comparar heuristicas:
   - usar um dataset exhaustive como oraculo;

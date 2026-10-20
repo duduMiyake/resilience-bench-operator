@@ -1,19 +1,27 @@
-# Documentacao do projeto
+# Documentacao do ResilienceBench-Operator
 
-Esta pasta concentra a documentacao funcional e tecnica do ResilienceBench-Operator.
+## Caminhos de leitura
 
-## Leitura recomendada
+- **Entender o projeto:** [proposito e escopo](purpose-and-scope.md), [arquitetura](architecture.md) e [modelo de dominio](domain-model.md).
+- **Comecar a desenvolver:** [ambiente e comandos](development-setup.md), [recursos Kubernetes](kubernetes-resources.md) e [AGENTS.md](../AGENTS.md).
+- **Desenvolver com LLM:** [contexto por tarefa e skills](development-with-llm.md).
+- **Mudar selecao ou resultados:** [heuristicas de selecao](heuristicas-de-selecao.md) e [resultados e cache](resultados-e-cache.md).
+- **Trabalhar no frontend:** [Visualizer](visualizer.md) e [README do Visualizer](../resilience-bench/visualizer/README.md).
+- **Usar os exemplos:** [overlay Hipster Shop](../samples/overlays/hipstershop/README.md).
+- **Executar e reproduzir experimentos:** [preparacao, rodadas e artefatos](running-experiments.md).
 
-1. [AGENTS.md](../AGENTS.md): regras de implementacao, arquitetura esperada e checklist para alteracoes.
-2. [LOCAL_RUN.md](../LOCAL_RUN.md): como criar o cluster local, compilar a imagem e aplicar os manifests.
-3. [heuristicas-de-selecao.md](heuristicas-de-selecao.md): como `exhaustive`, `randomSampling` e `knnAdaptive` selecionam cenarios.
-4. [resultados-e-cache.md](resultados-e-cache.md): como os resultados sao gravados hoje e como deve funcionar o cache/replay por cenario.
-5. [../POSSIBILIDADES_HEURISTICAS.md](../POSSIBILIDADES_HEURISTICAS.md): ideias e backlog para novas heuristicas.
+## Documentos por funcao
 
-## Organizacao
+- [Proposito e escopo](purpose-and-scope.md): problema, objetivos e limites.
+- [Arquitetura](architecture.md): componentes e fluxo principal.
+- [Modelo de dominio](domain-model.md): termos e relacoes entre recursos.
+- [Desenvolvimento](development-setup.md): requisitos e comandos locais.
+- [Recursos Kubernetes](kubernetes-resources.md): CRDs, manifests e compatibilidade.
+- [Execucao de experimentos](running-experiments.md): requisitos de cluster, rodadas, cache, acompanhamento e dados para reproducao de estudos.
+- [Selecao de cenarios](heuristicas-de-selecao.md): estrategias e comportamento adaptativo.
+- [Resultados e cache](resultados-e-cache.md): formatos, armazenamento e replay.
+- [Visualizer](visualizer.md): leitura visual de resultados e traces.
 
-- Documentos em `docs/` descrevem comportamento atual e uso esperado.
-- Documentos em `adr/` registram decisoes tecnicas ou notas de arquitetura.
-- Arquivos em `samples/` mostram manifests aplicaveis com `kubectl`.
+## Decisoes e material de pesquisa
 
-Ao alterar comportamento de selecao, execucao ou resultados, atualize o documento funcional correspondente em `docs/`.
+`../adr/` contem notas e decisoes tecnicas; `../POSSIBILIDADES_HEURISTICAS.md` registra ideias em avaliacao; `../papers/` guarda materiais associados a publicacoes. Atualize a documentacao funcional quando o comportamento do produto mudar. Registre em ADR apenas decisoes com trade-offs relevantes que precisem ser entendidos no futuro.

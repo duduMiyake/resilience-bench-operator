@@ -88,6 +88,18 @@ A chave e um SHA-256 da configuracao normalizada do `Scenario`, incluindo:
 - connectors;
 - parametros dos patterns/envs.
 
+### Validade experimental e separacao de cache
+
+`ScenarioCacheKeyFactory` usa o nome do workload e a quantidade de usuarios, mas nao inclui o conteudo do script/ConfigMap, `Workload.spec.options`, imagem do k6, versao da aplicacao alvo ou configuracao de infraestrutura. O caminho do cache usa o nome do benchmark, sem namespace. O hash identifica os campos normalizados do cenario; nao comprova equivalencia entre ambientes experimentais.
+
+Assim, alterar o script mantendo nome do workload, carga, falha e connectors pode gerar um cache hit com uma medicao anterior. A mesma limitacao vale para mudancas de duracao/iteracoes da carga, versao da aplicacao ou ambiente do cluster.
+
+Para uma nova campanha com essas mudancas, use um `cachePrefix` distinto dos resultados anteriores, por exemplo `/results/cache/campaign-02`, e mantenha o mesmo prefixo apenas entre rodadas cujos resultados sejam experimentalmente reutilizaveis. Para coletar novas medicoes sem replay, desabilite `resultCache` na nova rodada. Alterar o prefixo ou desabilitar cache nao recria uma fila existente; veja a [reutilizacao de filas](architecture.md).
+
+Backfill tambem exige essa verificacao de compatibilidade: metadados suficientes para calcular o hash nao comprovam que o dataset veio da mesma versao de workload, aplicacao ou infraestrutura. Registre essas versoes junto dos artefatos da campanha.
+
+### Metadados do resultado
+
 O resultado salvo inclui metadados como:
 
 - `benchmark`

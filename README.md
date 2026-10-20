@@ -6,13 +6,18 @@ The tool builds on the original [ResilienceBench](https://github.com/ppgia-unifo
 
 ## Documentation map
 
-Start here when changing or running the project:
+Start here to understand or develop the project:
 
 - [AGENTS.md](AGENTS.md): implementation rules and project conventions for agents and LLMs.
-- [LOCAL_RUN.md](LOCAL_RUN.md): local kind setup, build and deployment commands.
-- [docs/README.md](docs/README.md): documentation index.
+- [docs/README.md](docs/README.md): documentation index and recommended reading paths.
+- [docs/purpose-and-scope.md](docs/purpose-and-scope.md): goals, users and project boundaries.
+- [docs/architecture.md](docs/architecture.md): components and execution flow.
+- [docs/development-setup.md](docs/development-setup.md): build, test and local run commands.
+- [docs/running-experiments.md](docs/running-experiments.md): experiment workflow, result collection and study reproducibility.
+- [docs/development-with-llm.md](docs/development-with-llm.md): task-specific context and installed development skills.
+- [docs/kubernetes-resources.md](docs/kubernetes-resources.md): CRDs, compatibility and samples.
 - [docs/heuristicas-de-selecao.md](docs/heuristicas-de-selecao.md): scenario selection strategies and adaptive heuristic behavior.
-- [docs/resultados-e-cache.md](docs/resultados-e-cache.md): result files, S3 storage and planned cache/replay behavior.
+- [docs/resultados-e-cache.md](docs/resultados-e-cache.md): result files, S3 storage and cache/replay behavior.
 - [docs/visualizer.md](docs/visualizer.md): local Angular visualizer for heuristic traces and result files.
 - [POSSIBILIDADES_HEURISTICAS.md](POSSIBILIDADES_HEURISTICAS.md): backlog of possible heuristic and evaluation improvements.
 
@@ -48,8 +53,8 @@ Before you begin development, ensure you have the following prerequisites instal
 
    ```bash
    git clone https://github.com/cmendesce/resilience-bench-operator.git
-   cd resilience-bench-operator/resilience-bench
-   mvn clean install
+   cd resilience-bench-operator
+   mvn -B test --file ./resilience-bench/operator/pom.xml
    ```
 
 2. Open it in your preferred code editor.
@@ -69,7 +74,7 @@ kubectl apply -f ./crd
 kubectl apply -k ./samples/overlays/hipstershop
 ```
 
-For a full local kind setup, see [LOCAL_RUN.md](LOCAL_RUN.md).
+For development requirements and build/test commands, see [the development guide](docs/development-setup.md). The repository does not currently include a kind cluster provisioning guide.
 
 ## Visualizer
 

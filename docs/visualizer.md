@@ -109,7 +109,9 @@ search-space reduction = 1 - explored ratio
 
 The frontend reproduces the Operator aggregation for the external Exhaustive Reference. Scenarios are grouped by normalized resilience connector configuration, independently of workload and fault context. Connector/object keys and arrays are normalized and connectors are sorted, matching `ResilienceConfigurationKey`; grouping never depends on array position.
 
-For every configuration, each numeric scenario-result field is averaged across its operational contexts, matching `ConfigurationResultAggregator`. The default Operator objective is then applied exactly:
+For every configuration, each numeric scenario-result field is averaged across its operational contexts, matching `ConfigurationResultAggregator`.
+
+Aggregation precedes objective normalization and weighting: compute the objective of the averaged metrics, rather than averaging per-scenario scores. These differ for nonlinear normalization such as `reciprocal`. The [selection guide](heuristicas-de-selecao.md#agregar-metricas-antes-de-calcular-o-score) includes a worked example. The legacy default formula is:
 
 ```text
 configuration score = mean(checkout_success_rate | successRate)

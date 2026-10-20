@@ -141,6 +141,16 @@ Quanto menor a distancia, mais parecida a configuracao avaliada e com a candidat
 
 ### Como o k-NN calcula o score
 
+#### Agregar metricas antes de calcular o score
+
+`ConfigurationResultAggregator` agrupa os resultados pelos cenarios esperados de cada configuracao. Somente configuracoes com todos esses resultados entram nas avaliacoes completas. Para cada campo numerico observado, calcula a media aritmetica entre os resultados que possuem esse campo, alem dos sufixos `_mean`, `_min` e `_max`. `expectedContexts`, `completedContexts` e `complete` registram a cobertura. Completude de cenarios nao valida, por si so, que cada metrica exista em todos os contextos.
+
+Depois dessa agregacao, `ObjectiveScorer` aplica direcao, normalizacao e pesos as metricas agregadas. O score oficial da configuracao e, portanto, `objective(media_das_metricas)`. Ele nao e a media dos scores individuais dos cenarios.
+
+Exemplo com uma unica metrica minimizada, normalizacao `reciprocal` e `scale: 100`: duas latencias de `0` e `200` produzem media `100` e score de configuracao `100 / (100 + 100) = 0.5`. Tirar a media dos scores individuais produziria `(1 + 1/3) / 2`, aproximadamente `0.667`, que nao corresponde ao calculo implementado.
+
+O Visualizer usa o score agregado registrado no trace para a rodada heuristica. Para uma referencia exhaustive com objetivo estruturado, reproduz a agregacao de metricas seguida do objetivo; veja [comparacao com referencia exhaustive no Visualizer](visualizer.md#quantitative-exhaustive-reference). Preserve essa ordem ao alterar selecao, trace ou frontend.
+
 O k-NN usa dois tipos de score:
 
 - `score real`: score agregado de uma configuracao cujos scenarios operacionais foram concluidos;

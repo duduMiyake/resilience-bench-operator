@@ -6,6 +6,14 @@ Guia para LLMs e agentes que forem modificar este projeto. O objetivo e manter n
 
 Este projeto e um operador Kubernetes em Java 17. Ele usa CRDs para declarar experimentos de resiliencia e controllers/executors para gerar e executar cenarios em um cluster.
 
+Consulte [docs/README.md](docs/README.md) para a documentacao por funcao, [docs/architecture.md](docs/architecture.md) para o fluxo e [docs/domain-model.md](docs/domain-model.md) para os termos do dominio. [docs/development-with-llm.md](docs/development-with-llm.md) indica contexto por tarefa e skills disponiveis em `.agents/skills/`.
+
+O vocabulario canonico fica em `docs/domain-model.md`; decisoes ficam em `adr/`. As skills do Matt instaladas neste repositorio foram ajustadas para esses caminhos; nao crie um segundo glossario ou diretorio de ADRs. Antes de mudar a execucao, leia as limitacoes de namespace e reutilizacao de fila em `docs/architecture.md`.
+
+Para preparar ou reproduzir experimentos, leia [docs/running-experiments.md](docs/running-experiments.md). Nao presuma que o commit do checkout corresponde a imagem do operador implantada. Quando a tarefa envolver o ambiente particular do responsavel, consulte o roteiro local em `.local-docs/remote-experiments.md` e os parametros de `.local-docs/remote-environment.md`, se disponiveis; esses arquivos nao acompanham o clone publico.
+
+Este repositorio e publico. Use placeholders para destinos SSH e identificadores de infraestrutura nos arquivos versionados. Detalhes particulares de operacao ficam em `.local-docs/`, ignorado pelo Git; nunca adicione esse diretorio a um commit. Nao copie senhas, chaves privadas, kubeconfigs ou valores de credenciais para docs, manifests ou logs.
+
 Termos principais:
 
 - `Benchmark`: define o experimento e o espaco de busca.
@@ -52,9 +60,12 @@ resilience-bench/operator/src/main/java/io/resiliencebench/resources/selection
 
 Padrao atual:
 
-- estrategias simples implementam `ScenarioSelectionStrategy`;
-- estrategias adaptativas implementam `AdaptiveScenarioSelectionStrategy`;
-- `ScenarioSelectionStrategySelector` escolhe a estrategia com base em `Benchmark.spec.strategy.type`.
+- `ScenarioSelectionStrategy` define a entrada `selectScenarios`; `exhaustive` implementa essa interface diretamente;
+- estrategias que escolhem configuracoes implementam `ConfigurationSelectionStrategy`, que expande o retorno de `selectConfigurations` em cenarios;
+- estrategias adaptativas atuais implementam `AdaptiveConfigurationSelectionStrategy`, como `knnAdaptive`;
+- `ScenarioSelectionStrategySelector.select` escolhe a estrategia com base em `Benchmark.spec.strategy.type`; `selectAdaptive` disponibiliza a estrategia adaptativa ao executor.
+
+`AdaptiveScenarioSelectionStrategy` e `selectNextScenario` ainda existem no codigo, mas nao sao o contrato usado pelo fluxo adaptativo atual. Nao use essa interface antiga para integrar uma nova heuristica ao executor.
 
 Ideia central da geracao de cenarios:
 
@@ -68,7 +79,7 @@ Ao adicionar uma nova estrategia:
 
 1. crie uma nova classe em `resources/selection`;
 2. registre o novo tipo em `ScenarioSelectionStrategySpec`;
-3. atualize `ScenarioSelectionStrategySelector`;
+3. atualize `ScenarioSelectionStrategySelector`, incluindo `selectAdaptive` se a estrategia for adaptativa;
 4. adicione validacoes dos novos parametros;
 5. adicione testes unitarios;
 6. atualize a documentacao em `docs`.
@@ -76,11 +87,14 @@ Ao adicionar uma nova estrategia:
 Para estrategias adaptativas, mantenha o fluxo existente:
 
 ```text
-selectScenarios(...)
-  escolhe os cenarios iniciais da Queue
+selectConfigurations(...)
+  escolhe as configuracoes iniciais
+  selectScenarios(...) expande essas configuracoes para a Queue
 
-selectNextScenario(...)
-  escolhe o proximo cenario usando resultados ja avaliados
+selectNextDecision(...)
+  recebe configuracoes ja enfileiradas e avaliacoes completas
+  retorna Optional<ConfigurationSelectionDecision> com a proxima configuracao
+  o executor anexa todos os cenarios dessa configuracao a Queue
 ```
 
 Nao altere `DefaultQueueExecutor` sem necessidade. Ele ja sabe chamar estrategias adaptativas e anexar novos itens na `Queue`.
@@ -89,7 +103,7 @@ Nao altere `DefaultQueueExecutor` sem necessidade. Ele ja sabe chamar estrategia
 
 O `knnAdaptive` atual usa:
 
-- vetorizacao de cenarios;
+- vetorizacao de configuracoes de resiliencia;
 - distancia entre configuracoes;
 - score real calculado a partir das metricas;
 - score previsto por media ponderada;
@@ -126,7 +140,7 @@ Cuidados:
 - preserve os estados `PENDING`, `RUNNING` e `FINISHED`;
 - nao execute cenarios fora da fila;
 - nao anexe cenarios repetidos em estrategias adaptativas;
-- respeite `maxEvaluations` ou parametros equivalentes;
+- respeite o orcamento por configuracao: `maxConfigurations`, com fallback para `maxEvaluations` e `maxScenarios` na estrategia adaptativa atual;
 - mantenha a escrita de resultados compatavel com `ResultFileStep`.
 
 ## Testes
