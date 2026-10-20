@@ -181,6 +181,8 @@ Use linguagem direta e exemplos pequenos. Para heuristicas, explique:
 
 Mantenha `docs/heuristicas-de-selecao.md` atualizado quando alterar ou adicionar estrategias.
 
+Ao discutir ou implementar uma melhoria, consulte [docs/improvements/README.md](docs/improvements/README.md) e a proposta vinculada ao ID. Confira o estado real no codigo antes de seguir a proposta. Na mesma alteracao, atualize estado, data de revisao, decisoes e evidencia (commit/PR, verificacoes e artefatos publicaveis). Referencie o ID na issue/PR ou no commit de implementacao. Nao marque como concluida uma melhoria com verificacoes acordadas pendentes e nao apresente nomes de estrategias propostas como tipos ja suportados pelo CRD. Propostas e guias de comportamento implementado tem funcoes diferentes; atualize ambos quando aplicavel.
+
 ## Samples
 
 Arquivos em `samples` devem continuar aplicaveis com `kubectl`.

@@ -13,6 +13,7 @@ Comece por `AGENTS.md`, [proposito e escopo](purpose-and-scope.md) e [modelo de 
 | Mudar resultados/cache | `resultados-e-cache.md`, `execution/resultcache`, `ResultFileStep` | Hash estavel, origem da medicao, formatos existentes e leitura pelo Visualizer |
 | Mudar Visualizer | `visualizer.md`, README do modulo, `core/services` e componente afetado | Normalizacao dos formatos atuais/legados, significado dos scores e testes `.spec.ts` |
 | Preparar ou reproduzir um experimento | `running-experiments.md`, README do overlay, `startup-hipstershop`, manifests e imagem do operador | Contexto do cluster, revisao efetivamente executada, encerramento da rodada anterior, politica de cache e registro metodologico |
+| Discutir ou implementar uma melhoria | `improvements/README.md`, proposta vinculada e guias funcionais da area | Hipotese, escopo acordado, ID estavel, estado atual e evidencia de implementacao/validacao |
 
 ## Skills disponiveis no repositorio
 
@@ -34,6 +35,6 @@ Adaptacoes locais: abrir as skills irmas sem depender de uma ferramenta chamada 
 - Definicoes e relacoes do dominio: `domain-model.md`.
 - Comportamento implementado: guia funcional correspondente.
 - Decisao duravel com alternativas e consequencias: `../adr/`. As notas existentes sao historicas; nao presumir que todo exemplo nelas corresponde ao codigo atual.
-- Ideias ainda nao implementadas: `../POSSIBILIDADES_HEURISTICAS.md`.
+- Ideias e discussoes de implementacao: [registro de melhorias](improvements/README.md) e a secao vinculada a cada ID. Atualize estado, data de revisao e evidencia na mesma alteracao que evoluir a proposta. O arquivo `../POSSIBILIDADES_HEURISTICAS.md` e apenas uma entrada de compatibilidade.
 
 Ao concluir uma alteracao, informe arquivos afetados, comportamento resultante, verificacao executada e limites ainda nao verificados. Compilar ou passar testes unitarios nao demonstra, por si so, que um experimento executa no servidor/cluster.

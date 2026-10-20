@@ -19,7 +19,7 @@ Start here to understand or develop the project:
 - [docs/heuristicas-de-selecao.md](docs/heuristicas-de-selecao.md): scenario selection strategies and adaptive heuristic behavior.
 - [docs/resultados-e-cache.md](docs/resultados-e-cache.md): result files, S3 storage and cache/replay behavior.
 - [docs/visualizer.md](docs/visualizer.md): local Angular visualizer for heuristic traces and result files.
-- [POSSIBILIDADES_HEURISTICAS.md](POSSIBILIDADES_HEURISTICAS.md): backlog of possible heuristic and evaluation improvements.
+- [docs/improvements/README.md](docs/improvements/README.md): improvement proposals, implementation status and validation evidence.
 
 ## Architecture
 

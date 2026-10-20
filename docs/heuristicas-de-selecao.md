@@ -340,3 +340,7 @@ spec:
 `randomSampling` escolhe uma amostra fixa e reprodutivel.
 
 `knnAdaptive` escolhe uma amostra inicial espalhada e depois prioriza configuracoes com melhor score previsto, com um bonus configuravel para exploracao.
+
+## Propostas de evolucao
+
+Novas estrategias sao discutidas em [melhorias de heuristicas e avaliacao](improvements/heuristics.md), com estado e evidencia no [registro de melhorias](improvements/README.md). Os nomes de trabalho dessas propostas ainda nao sao valores suportados de `spec.strategy.type`. Quando uma estrategia for implementada, atualize este guia com seu contrato efetivo e preserve o vinculo com o ID da melhoria.
