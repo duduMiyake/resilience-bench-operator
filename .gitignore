@@ -63,6 +63,7 @@ kubeconfig*
 .kube/
 
 # Kubernetes/local cluster state
+.vagrant/
 *.kubeconfig
 *.context
 .local-cluster/
