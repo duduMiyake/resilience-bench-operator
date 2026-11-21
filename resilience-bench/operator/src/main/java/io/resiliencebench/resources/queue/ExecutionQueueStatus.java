@@ -11,14 +11,25 @@ public class ExecutionQueueStatus {
   private long running;
   @PrinterColumn(name = "Finished")
   private long finished;
+  @PrinterColumn(name = "Failed")
+  private long failed;
 
   public ExecutionQueueStatus() {
   }
 
   public ExecutionQueueStatus(long running, long pending, long finished) {
+    this(running, pending, finished, 0);
+  }
+
+  public ExecutionQueueStatus(long running, long pending, long finished, long failed) {
     this.running = running;
     this.pending = pending;
     this.finished = finished;
+    this.failed = failed;
+  }
+
+  public long getFailed() {
+    return failed;
   }
 
   public long getRunning() {

@@ -19,6 +19,8 @@ import static io.resiliencebench.support.Annotations.*;
 @Service
 public class K6JobFactory {
 
+  static final long TEMPORAL_JOB_DEADLINE_SECONDS = 6 * 60 * 60;
+
   private static final String DEFAULT_AWS_CREDENTIALS_SECRET = "aws-credentials";
 
   public K6JobFactory() {
@@ -26,6 +28,13 @@ public class K6JobFactory {
 
   public Job create(Scenario scenario, Workload workload, ExecutionQueueItem executionQueueItem) {
     var meta = createMeta(scenario, workload);
+    var fault = scenario.getSpec().getFault();
+    var temporal = fault != null && fault.hasWindows();
+    var container = createK6Container(scenario.getSpec().getWorkload(), workload, executionQueueItem);
+    if (temporal) {
+      // The operator opens a pod-local port-forward after the scheduler is ready.
+      container.setCommand(List.of("k6", "run", "--paused", "--address", "127.0.0.1:6565", "/scripts/k6.js"));
+    }
     return new JobBuilder()
             .withMetadata(meta)
             .withNewSpec()
@@ -36,11 +45,12 @@ public class K6JobFactory {
             .withNewSpec()
             .withRestartPolicy("Never")
             .withNodeSelector(resolveNodeSelector())
-            .withContainers(createK6Container(scenario.getSpec().getWorkload(), workload, executionQueueItem))
+            .withContainers(container)
             .withVolumes(createVolumes(workload))
             .endSpec()
             .endTemplate()
-            .withBackoffLimit(4)
+            .withBackoffLimit(temporal ? 0 : 4)
+            .withActiveDeadlineSeconds(temporal ? TEMPORAL_JOB_DEADLINE_SECONDS : null)
             .endSpec()
             .build();
   }

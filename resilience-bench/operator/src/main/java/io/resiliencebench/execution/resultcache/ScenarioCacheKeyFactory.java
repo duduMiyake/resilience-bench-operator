@@ -34,10 +34,12 @@ public class ScenarioCacheKeyFactory {
     json.put("workload_name", spec.getWorkload().getWorkloadName());
     json.put("workload_users", spec.getWorkload().getUsers());
     if (spec.getFault() != null) {
+      var fault = spec.getFault();
       json.put("fault", new JsonObject()
-              .put("provider", spec.getFault().getProvider())
-              .put("percentage", spec.getFault().getPercentage())
-              .put("services", new JsonArray(spec.getFault().getServices())));
+              .put("provider", fault.getProvider())
+              .put("percentage", fault.getPercentage())
+              .put("services", new JsonArray(fault.getServices()))
+              .mergeIn(fault.windowProfileJson()));
     }
     json.put("connectors", sortedConnectors(spec.toConnectorsInJson()));
     return json;
@@ -54,7 +56,8 @@ public class ScenarioCacheKeyFactory {
       normalized.put("fault", new JsonObject()
               .put("provider", result.getValue("fault_provider"))
               .put("percentage", result.getValue("fault_percentage"))
-              .put("services", result.getValue("fault_services")));
+              .put("services", result.getValue("fault_services"))
+              .mergeIn(result.getJsonObject("fault_profile", new JsonObject())));
     }
     normalized.put("connectors", sortedConnectors(result.getJsonArray("connectors", new JsonArray())));
     return sha256(normalized.encode());

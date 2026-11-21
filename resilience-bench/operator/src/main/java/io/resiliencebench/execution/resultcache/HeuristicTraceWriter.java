@@ -204,6 +204,12 @@ public class HeuristicTraceWriter {
             .put("scenarioHash", cacheKeyFactory.hash(scenario))
             .put("resultScore", scenarioResultCache.resultScore(benchmark, result))
             .put("completedAt", completedAt);
+    if (result.containsKey("faultTransitions")) {
+      execution.put("faultTransitions", result.getJsonArray("faultTransitions"))
+              .put("faultWindowsStarted", result.getValue("faultWindowsStarted"))
+              .put("faultWindowsCompleted", result.getValue("faultWindowsCompleted"))
+              .put("scenarioDurationMs", result.getValue("scenarioDurationMs"));
+    }
     executions.add(execution);
     decision.put("executions", executions);
     appendEvent(trace, new JsonObject()
@@ -381,10 +387,12 @@ public class HeuristicTraceWriter {
                     .put("name", scenario.getSpec().getWorkload().getWorkloadName())
                     .put("users", scenario.getSpec().getWorkload().getUsers()));
     if (scenario.getSpec().getFault() != null) {
+      var fault = scenario.getSpec().getFault();
       json.put("fault", new JsonObject()
-              .put("provider", scenario.getSpec().getFault().getProvider())
-              .put("percentage", scenario.getSpec().getFault().getPercentage())
-              .put("services", new JsonArray(scenario.getSpec().getFault().getServices())));
+              .put("provider", fault.getProvider())
+              .put("percentage", fault.getPercentage())
+              .put("services", new JsonArray(fault.getServices()))
+              .mergeIn(fault.windowProfileJson()));
     }
     return json;
   }
