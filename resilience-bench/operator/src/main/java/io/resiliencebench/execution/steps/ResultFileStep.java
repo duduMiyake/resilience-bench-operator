@@ -45,16 +45,23 @@ public class ResultFileStep extends ExecutorStep {
 
   @Override
   protected void internalExecute(Scenario scenario, ExecutionQueue executionQueue) {
+    storeResult(scenario, executionQueue, new JsonObject());
+  }
+
+  public void storeResult(Scenario scenario, ExecutionQueue executionQueue, JsonObject faultMetrics) {
     var executionQueueItem = executionQueue.getItem(scenario.getMetadata().getName());
     var currentResults = fileProvider.getFileAsString(executionQueueItem.getResultFile());
     if (currentResults.isPresent()) {
       var benchmark = benchmarkRepository.find(executionQueue.getMetadata().getNamespace(), executionQueue.getSpec().getBenchmark());
       if (benchmark.isEmpty()) {
+        if (!faultMetrics.isEmpty()) {
+          throw new IllegalStateException("Benchmark removed before recording temporal result");
+        }
         logger.warn("Benchmark {} not found while writing results", executionQueue.getSpec().getBenchmark());
         return;
       }
       var currentResultsJson = scenarioResultCache.enrichResult(
-              new JsonObject(currentResults.get()),
+              new JsonObject(currentResults.get()).mergeIn(faultMetrics),
               benchmark.get(),
               scenario,
               ScenarioResultCache.EXECUTED);
@@ -64,6 +71,9 @@ public class ResultFileStep extends ExecutorStep {
               ScenarioResultCache.EXECUTED, currentResultsJson);
       scenarioResultCache.saveToCache(benchmark.get(), scenario, currentResultsJson);
     } else {
+      if (!faultMetrics.isEmpty()) {
+        throw new IllegalStateException("No k6 result found for temporal scenario " + scenario.getMetadata().getName());
+      }
       logger.warn("No results found for {}", executionQueueItem.getResultFile());
     }
   }

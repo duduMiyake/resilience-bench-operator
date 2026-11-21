@@ -139,6 +139,10 @@ public final class ScenarioFactory {
 
       if (scenarioTemplate.getFault() != null) {
         faultPercentages = scenarioTemplate.getFault().getPercentages();
+        if (faultPercentages == null || faultPercentages.isEmpty()
+                || faultPercentages.stream().anyMatch(java.util.Objects::isNull)) {
+          throw new IllegalArgumentException("Scenario fault requires a nonempty list of percentages");
+        }
       }
 
       for (var workloadUser : workloadUsers) {
@@ -149,11 +153,7 @@ public final class ScenarioFactory {
             scenarioNameBuilder.append(scenarioTemplate.getName()).append("-").append(workloadUser).append("vu");
             ScenarioFault scenarioFault = null;
             if (scenarioTemplate.getFault() != null) {
-              scenarioFault = new ScenarioFault(
-                      scenarioTemplate.getFault().getProvider(),
-                      faultPercentages.get(j),
-                      scenarioTemplate.getFault().getServices()
-              );
+              scenarioFault = scenarioTemplate.getFault().forPercentage(faultPercentages.get(j));
               scenarioNameBuilder.append("-").append(faultPercentages.get(j)).append("f");
             }
             var scenarioName = generateScenarioName(scenarioNameBuilder.toString(), i + 1);

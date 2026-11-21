@@ -14,6 +14,10 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.failed
+      name: Failed
+      priority: 0
+      type: integer
     - jsonPath: .status.finished
       name: Finished
       priority: 0
@@ -39,6 +43,10 @@ spec:
                 description: The list of items to execute.
                 items:
                   properties:
+                    failureReason:
+                      description: Why a temporal scenario was stopped without a valid
+                        result.
+                      type: string
                     finishedAt:
                       description: The time when the execution finished.
                       type: string
@@ -54,7 +62,7 @@ spec:
                       type: string
                     status:
                       description: "The status of the execution. Can be 'pending',\
-                        \ 'running' or 'finished'. Automatically managed."
+                        \ 'running', 'finished' or 'failed'. Automatically managed."
                       type: string
                   type: object
                 type: array
@@ -65,6 +73,8 @@ spec:
             type: object
           status:
             properties:
+              failed:
+                type: integer
               finished:
                 type: integer
               pending:

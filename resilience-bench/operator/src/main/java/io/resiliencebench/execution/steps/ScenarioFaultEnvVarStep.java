@@ -23,7 +23,8 @@ public class ScenarioFaultEnvVarStep extends EnvironmentStep {
 
   @Override
   protected boolean isApplicable(Scenario scenario) {
-    return scenario.getSpec().getFault() != null;
+    var fault = scenario.getSpec().getFault();
+    return fault != null && !fault.hasWindows();
   }
 
   // Does not matter what was set in fault.provider. we'll apply it as env var of envoy container.

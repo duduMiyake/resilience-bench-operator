@@ -50,7 +50,7 @@ O controller procura uma fila com o mesmo namespace e nome do benchmark. Se ela 
 
 Ao criar um experimento sem fila existente, `createScenariosForQueue` remove todos os `Scenario`s do namespace. `prepareToRunScenarios` tambem remove todas as filas desse namespace. Essa e uma limitacao atual: o isolamento entre benchmarks concorrentes no mesmo namespace nao e garantido. Mudancas nessa area precisam considerar os outros experimentos e os recursos ja persistidos.
 
-`StepRegistry` define a ordem efetiva de preparacao: status da fila, Istio retry, circuit breaker, timeout, fault, ambiente, readiness, fault por variavel de ambiente e readiness novamente. Depois do Job: status, resultados e restauracao de ambiente. `ScenarioFaultAPIStep` existe, mas nao esta na lista de preparacao atual; a existencia de uma classe nao garante que seu comportamento esteja ativo.
+`StepRegistry` define a ordem efetiva de preparacao: status da fila, Istio retry, circuit breaker, timeout, fault, ambiente, readiness, fault por variavel de ambiente e readiness novamente. Depois do Job: status, resultados e restauracao de ambiente. `ScenarioFaultAPIStep` existe, mas nao esta na lista de preparacao atual; a existencia de uma classe nao garante que seu comportamento esteja ativo. Com `fault.windows`, o executor usa uma [linha do tempo dedicada](fault-windows.md), sem configurar `FAULT_PERCENTAGE` nesse cenario.
 
 O watcher do Job trata eventos `MODIFIED` com `completionTime` e evita repetir a conclusao dentro do mesmo watcher. Isso nao equivale a uma garantia de recuperacao completa apos reinicio do operador. Falhas de Job e fechamento do watcher precisam ser considerados ao mudar esse fluxo.
 

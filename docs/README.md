@@ -19,6 +19,7 @@
 - [Desenvolvimento](development-setup.md): requisitos e comandos locais.
 - [Recursos Kubernetes](kubernetes-resources.md): CRDs, manifests e compatibilidade.
 - [Execucao de experimentos](running-experiments.md): requisitos de cluster, rodadas, cache, acompanhamento e dados para reproducao de estudos.
+- [Injecao de falhas por janelas](fault-windows.md): perfil temporal, configuracao e validacao.
 - [Selecao de cenarios](heuristicas-de-selecao.md): estrategias e comportamento adaptativo.
 - [Resultados e cache](resultados-e-cache.md): formatos, armazenamento e replay.
 - [Visualizer](visualizer.md): leitura visual de resultados e traces.
