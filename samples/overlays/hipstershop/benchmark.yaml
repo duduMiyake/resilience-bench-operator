@@ -40,11 +40,11 @@ metadata:
   name: frontendservice
   annotations:
     resiliencebench.io/virtual-service: "frontendservice" 
-    resiliencebench.io/container: "envoy"
+    resiliencebench.io/container: "server"
 spec:
   selector:
     matchLabels:
-      app: frontendservice
+      app: frontend
 ---
 apiVersion: resiliencebench.io/v1beta1
 kind: ResilientService

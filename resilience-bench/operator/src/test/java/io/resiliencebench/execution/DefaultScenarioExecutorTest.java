@@ -115,12 +115,35 @@ class DefaultScenarioExecutorTest {
     verify(fixture.queueRepository).updateStatus(fixture.queue);
   }
 
+  @Test
+  void failedJobRestoresEnvironmentAndDoesNotAdvanceQueue() {
+    var fixture = new TemporalFixture();
+    var scenarios = fixture.scenarioRepository;
+    when(scenarios.get("benchmarking", "temporal")).thenReturn(fixture.scenario);
+    when(fixture.scenario.getMetadata().getAnnotations()).thenReturn(Map.of(OWNED_BY, "queue"));
+    fixture.job.getMetadata().setNamespace("benchmarking");
+    fixture.job.getMetadata().setAnnotations(Map.of(SCENARIO, "temporal"));
+    var status = new JobStatus();
+    status.setConditions(List.of(new io.fabric8.kubernetes.api.model.batch.v1.JobConditionBuilder()
+            .withType("Failed").withStatus("True").build()));
+    fixture.job.setStatus(status);
+
+    var watcher = fixture.executor().createJobCompletionWatcher(fixture.onCompletion);
+    watcher.eventReceived(Watcher.Action.MODIFIED, fixture.job);
+    watcher.eventReceived(Watcher.Action.MODIFIED, fixture.job);
+
+    verify(fixture.environment, times(1)).execute(fixture.scenario, fixture.queue);
+    verifyNoInteractions(fixture.results, fixture.update, fixture.onCompletion);
+    assertEquals(ExecutionQueueItem.Status.FAILED, fixture.item.getStatus());
+  }
+
   @SuppressWarnings("unchecked")
   private static class TemporalFixture {
     final KubernetesClient kube = mock(KubernetesClient.class, RETURNS_DEEP_STUBS);
     final StepRegistry registry = mock(StepRegistry.class);
     final K6JobFactory factory = mock(K6JobFactory.class);
     final CustomResourceRepository<ExecutionQueue> queueRepository = mock(CustomResourceRepository.class);
+    final CustomResourceRepository<Scenario> scenarioRepository = mock(CustomResourceRepository.class);
     final Workload workload = mock(Workload.class);
     final Scenario scenario = mock(Scenario.class, RETURNS_DEEP_STUBS);
     final ExecutionQueue queue = mock(ExecutionQueue.class, RETURNS_DEEP_STUBS);
@@ -168,10 +191,13 @@ class DefaultScenarioExecutorTest {
       }).when(k6).awaitPausedAndRun(eq(job), any(Runnable.class), any(Runnable.class));
     }
 
+    DefaultScenarioExecutor executor() {
+      return new DefaultScenarioExecutor(kube, registry, factory,
+              scenarioRepository, queueRepository, mock(CustomResourceRepository.class), service, k6);
+    }
+
     void execute() {
-      var executor = new DefaultScenarioExecutor(kube, registry, factory, mock(CustomResourceRepository.class),
-              queueRepository, mock(CustomResourceRepository.class), service, k6);
-      executor.executeTemporal(scenario, queue, workload, onCompletion);
+      executor().executeTemporal(scenario, queue, workload, onCompletion);
     }
   }
 

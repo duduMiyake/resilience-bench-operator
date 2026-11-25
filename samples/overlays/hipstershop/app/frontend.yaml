@@ -62,14 +62,14 @@ spec:
             value: "adservice:9555"
           - name: SHOPPING_ASSISTANT_SERVICE_ADDR
             value: "shoppingassistantservice:80"
-          # - name: GRPC_MAX_ATTEMPTS
-          #   value: "5"
-          # - name: GRPC_INITIAL_BACKOFF
-          #   value: "0.3s"
-          # - name: GRPC_MAX_BACKOFF
-          #   value: "10s"
-          # - name: GRPC_BACKOFF_MULTIPLIER
-          #   value: "1.2"
+          - name: GRPC_MAX_ATTEMPTS
+            value: ""
+          - name: GRPC_INITIAL_BACKOFF
+            value: ""
+          - name: GRPC_MAX_BACKOFF
+            value: ""
+          - name: GRPC_BACKOFF_MULTIPLIER
+            value: ""
           # # ENV_PLATFORM: One of: local, gcp, aws, azure, onprem, alibaba
           # # When not set, defaults to "local" unless running in GKE, otherwies auto-sets to gcp
           - name: ENV_PLATFORM
