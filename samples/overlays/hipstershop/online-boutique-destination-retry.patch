@@ -1,0 +1,524 @@
+diff --git a/src/checkoutservice/main.go b/src/checkoutservice/main.go
+index 89b15bd2fe0bb2573a245ae782423a3fb4e38166..b1386be840ad65884419b09bbe8234dd10ac9805 100644
+--- a/src/checkoutservice/main.go
++++ b/src/checkoutservice/main.go
+@@ -113,12 +113,12 @@ func main() {
+ 	mustMapEnv(&svc.emailSvcAddr, "EMAIL_SERVICE_ADDR")
+ 	mustMapEnv(&svc.paymentSvcAddr, "PAYMENT_SERVICE_ADDR")
+ 
+-	mustConnGRPC(ctx, &svc.shippingSvcConn, svc.shippingSvcAddr)
+-	mustConnGRPC(ctx, &svc.productCatalogSvcConn, svc.productCatalogSvcAddr)
+-	mustConnGRPC(ctx, &svc.cartSvcConn, svc.cartSvcAddr)
+-	mustConnGRPC(ctx, &svc.currencySvcConn, svc.currencySvcAddr)
+-	mustConnGRPC(ctx, &svc.emailSvcConn, svc.emailSvcAddr)
+-	mustConnGRPC(ctx, &svc.paymentSvcConn, svc.paymentSvcAddr)
++	mustConnGRPC(ctx, &svc.shippingSvcConn, svc.shippingSvcAddr, "SHIPPING")
++	mustConnGRPC(ctx, &svc.productCatalogSvcConn, svc.productCatalogSvcAddr, "")
++	mustConnGRPC(ctx, &svc.cartSvcConn, svc.cartSvcAddr, "")
++	mustConnGRPC(ctx, &svc.currencySvcConn, svc.currencySvcAddr, "")
++	mustConnGRPC(ctx, &svc.emailSvcConn, svc.emailSvcAddr, "")
++	mustConnGRPC(ctx, &svc.paymentSvcConn, svc.paymentSvcAddr, "PAYMENT")
+ 
+ 	log.Infof("service config: %+v", svc)
+ 
+@@ -160,7 +160,7 @@ func initTracing() {
+ 	defer cancel()
+ 
+ 	mustMapEnv(&collectorAddr, "COLLECTOR_SERVICE_ADDR")
+-	mustConnGRPC(ctx, &collectorConn, collectorAddr)
++	mustConnGRPC(ctx, &collectorConn, collectorAddr, "")
+ 
+ 	exporter, err := otlptracegrpc.New(
+ 		ctx,
+@@ -205,7 +205,7 @@ func mustMapEnv(target *string, envKey string) {
+ 	*target = v
+ }
+ 
+-func mustConnGRPC(ctx context.Context, conn **grpc.ClientConn, addr string) {
++func mustConnGRPC(ctx context.Context, conn **grpc.ClientConn, addr, retryDestination string) {
+ 	var err error
+ 	ctx, cancel := context.WithTimeout(ctx, time.Second*3)
+ 	defer cancel()
+@@ -216,11 +216,14 @@ func mustConnGRPC(ctx context.Context, conn **grpc.ClientConn, addr string) {
+ 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
+ 	}
+ 
+-	serviceConfig := BuildServiceConfig()
+-	if serviceConfig != "" {
+-		opts = append(opts, grpc.WithDefaultServiceConfig(serviceConfig))
+-	} else {
+-		log.Warn("service config not provided, proceeding with default settings")
++	if retryDestination != "" {
++		serviceConfig, configErr := BuildServiceConfig(retryDestination)
++		if configErr != nil {
++			log.Fatal(configErr)
++		}
++		if serviceConfig != "" {
++			opts = append(opts, grpc.WithDefaultServiceConfig(serviceConfig))
++		}
+ 	}
+ 
+ 	*conn, err = grpc.DialContext(ctx, addr, opts...)
+diff --git a/src/checkoutservice/svcconfig.go b/src/checkoutservice/svcconfig.go
+index 30afdae6be68676e129eb2e36ee03550c998086b..e8fb597411c24cf06c804ba0656cb5188193e7e2 100644
+--- a/src/checkoutservice/svcconfig.go
++++ b/src/checkoutservice/svcconfig.go
+@@ -1,76 +1,44 @@
+ package main
+ 
+ import (
++	"encoding/json"
+ 	"fmt"
++	"math"
+ 	"os"
+ 	"strconv"
++	"time"
+ )
+ 
+-func GetEnv(key string, fallback string) string {
+-	value := os.Getenv(key)
+-	if value == "" {
+-		return fallback
++// BuildServiceConfig returns no retry policy when the destination's variables are empty.
++func BuildServiceConfig(destination string) (string, error) {
++	prefix := "GRPC_" + destination + "_"
++	attemptsText := os.Getenv(prefix + "MAX_ATTEMPTS")
++	initial := os.Getenv(prefix + "INITIAL_BACKOFF")
++	maximum := os.Getenv(prefix + "MAX_BACKOFF")
++	multiplierText := os.Getenv(prefix + "BACKOFF_MULTIPLIER")
++	if attemptsText == "" && initial == "" && maximum == "" && multiplierText == "" {
++		return "", nil
+ 	}
+-	return value
+-}
+-
+-func GetEnvInt(key string) (int, bool) {
+-	valueStr := os.Getenv(key)
+-	if value, err := strconv.Atoi(valueStr); err == nil {
+-		return value, true
++	attempts, attemptErr := strconv.Atoi(attemptsText)
++	multiplier, multiplierErr := strconv.ParseFloat(multiplierText, 64)
++	initialDuration, initialErr := time.ParseDuration(initial)
++	maxDuration, maxErr := time.ParseDuration(maximum)
++	if attemptErr != nil || attempts < 2 || attempts > 5 || multiplierErr != nil ||
++		multiplier <= 0 || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) ||
++		initialErr != nil || maxErr != nil || initialDuration <= 0 || maxDuration <= 0 {
++		return "", fmt.Errorf("invalid or incomplete gRPC retry policy for %s", destination)
+ 	}
+-	return 0, false
+-}
+-
+-func GetEnvFloat(key string) (float64, bool) {
+-	valueStr := os.Getenv(key)
+-	if value, err := strconv.ParseFloat(valueStr, 64); err == nil {
+-		return value, true
++	policy := map[string]any{
++		"maxAttempts": attempts, "initialBackoff": grpcSeconds(initialDuration), "maxBackoff": grpcSeconds(maxDuration),
++		"backoffMultiplier": multiplier, "retryableStatusCodes": []string{"UNAVAILABLE"},
+ 	}
+-	return 0.0, false
++	config := map[string]any{"methodConfig": []any{map[string]any{
++		"name": []any{map[string]any{}}, "retryPolicy": policy,
++	}}}
++	body, err := json.Marshal(config)
++	return string(body), err
+ }
+ 
+-func BuildServiceConfig() string {
+-	maxAttempts, maxAttemptsOk := GetEnvInt("GRPC_MAX_ATTEMPTS")
+-	initialBackoff := GetEnv("GRPC_INITIAL_BACKOFF", "")
+-	maxBackoff := GetEnv("GRPC_MAX_BACKOFF", "")
+-	backoffMultiplier, backoffMultiplierOk := GetEnvFloat("GRPC_BACKOFF_MULTIPLIER")
+-
+-	hedgingMaxAttempts := GetEnv("GRPC_HEDGING_MAX_ATTEMPTS", "")
+-	hedgingDelay := GetEnv("GRPC_HEDGING_DELAY", "")
+-
+-	if maxAttemptsOk && backoffMultiplierOk && initialBackoff != "" && maxBackoff != "" {
+-		return fmt.Sprintf(`{
+-			"methodConfig": [
+-				{
+-					"name": [
+-						{ "service": "", "method": "" }
+-					],
+-					"retryPolicy": {
+-						"MaxAttempts": %d,
+-						"InitialBackoff": "%s",
+-						"MaxBackoff": "%s",
+-						"BackoffMultiplier": %f,
+-						"RetryableStatusCodes": [ "UNAVAILABLE" ]
+-					}
+-				}
+-			]
+-		}`, maxAttempts, initialBackoff, maxBackoff, backoffMultiplier)
+-	} else if hedgingMaxAttempts != "" && hedgingDelay != "" {
+-		return fmt.Sprintf(`{
+-			"methodConfig": [
+-				{
+-					"name": [
+-						{ "service": "", "method": "" }
+-					],
+-					"hedgingPolicy": {
+-						"MaxAttempts": %d,
+-						"HedgingDelay": "%s",
+-					}
+-				}
+-			]
+-		}`, hedgingMaxAttempts, hedgingDelay)
+-	} else {
+-		return ""
+-	}
++func grpcSeconds(duration time.Duration) string {
++	return strconv.FormatFloat(duration.Seconds(), 'f', -1, 64) + "s"
+ }
+diff --git a/src/checkoutservice/svcconfig_test.go b/src/checkoutservice/svcconfig_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..2b173b766cf579b966dc98925c17156f36f775fd
+--- /dev/null
++++ b/src/checkoutservice/svcconfig_test.go
+@@ -0,0 +1,83 @@
++package main
++
++import (
++	"context"
++	"net"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"google.golang.org/grpc"
++	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/credentials/insecure"
++	healthpb "google.golang.org/grpc/health/grpc_health_v1"
++	"google.golang.org/grpc/status"
++	"google.golang.org/grpc/test/bufconn"
++)
++
++type unavailableHealth struct {
++	healthpb.UnimplementedHealthServer
++	calls atomic.Int32
++}
++
++func (s *unavailableHealth) Check(context.Context, *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
++	s.calls.Add(1)
++	return nil, status.Error(codes.Unavailable, "test-only unavailability")
++}
++
++func TestDestinationPoliciesDoNotOverwriteOrInherit(t *testing.T) {
++	setPolicy := func(destination, attempts string) {
++		for name, value := range map[string]string{
++			"MAX_ATTEMPTS": attempts, "INITIAL_BACKOFF": "0.001s",
++			"MAX_BACKOFF": "0.001s", "BACKOFF_MULTIPLIER": "1",
++		} {
++			if attempts == "" {
++				value = ""
++			}
++			t.Setenv("GRPC_"+destination+"_"+name, value)
++		}
++	}
++	setPolicy("PAYMENT", "2")
++	setPolicy("SHIPPING", "5")
++	t.Setenv("GRPC_MAX_ATTEMPTS", "4")
++	assertAttempts := func(dest string, expected int32) {
++		t.Helper()
++		config, err := BuildServiceConfig(dest)
++		if err != nil {
++			t.Fatal(err)
++		}
++		listener := bufconn.Listen(1024 * 1024)
++		server := grpc.NewServer()
++		service := &unavailableHealth{}
++		healthpb.RegisterHealthServer(server, service)
++		go server.Serve(listener)
++		defer server.Stop()
++		var options = []grpc.DialOption{
++			grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
++			grpc.WithTransportCredentials(insecure.NewCredentials()),
++		}
++		if config != "" {
++			options = append(options, grpc.WithDefaultServiceConfig(config))
++		}
++		conn, err := grpc.NewClient("passthrough:///test", options...)
++		if err != nil {
++			t.Fatal(err)
++		}
++		defer conn.Close()
++		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
++		defer cancel()
++		_, err = healthpb.NewHealthClient(conn).Check(ctx, &healthpb.HealthCheckRequest{})
++		if status.Code(err) != codes.Unavailable || service.calls.Load() != expected {
++			t.Fatalf("%s: got %d calls and %v, want %d calls and UNAVAILABLE", dest, service.calls.Load(), err, expected)
++		}
++	}
++	assertAttempts("PAYMENT", 2)
++	assertAttempts("SHIPPING", 5)
++	setPolicy("PAYMENT", "")
++	assertAttempts("PAYMENT", 1)
++	assertAttempts("SHIPPING", 5)
++	t.Setenv("GRPC_PAYMENT_MAX_ATTEMPTS", "2")
++	if _, err := BuildServiceConfig("PAYMENT"); err == nil {
++		t.Fatal("partial configuration was accepted")
++	}
++}
+diff --git a/src/frontend/main.go b/src/frontend/main.go
+index 32239e795a58baf0bd35ae697f45dd192e2a4503..31f672d98f48d4eff9c903b996023e915c9eb110 100644
+--- a/src/frontend/main.go
++++ b/src/frontend/main.go
+@@ -137,13 +137,13 @@ func main() {
+ 	mustMapEnv(&svc.adSvcAddr, "AD_SERVICE_ADDR")
+ 	mustMapEnv(&svc.shoppingAssistantSvcAddr, "SHOPPING_ASSISTANT_SERVICE_ADDR")
+ 
+-	mustConnGRPC(ctx, &svc.currencySvcConn, svc.currencySvcAddr)
+-	mustConnGRPC(ctx, &svc.productCatalogSvcConn, svc.productCatalogSvcAddr)
+-	mustConnGRPC(ctx, &svc.cartSvcConn, svc.cartSvcAddr)
+-	mustConnGRPC(ctx, &svc.recommendationSvcConn, svc.recommendationSvcAddr)
+-	mustConnGRPC(ctx, &svc.shippingSvcConn, svc.shippingSvcAddr)
+-	mustConnGRPC(ctx, &svc.checkoutSvcConn, svc.checkoutSvcAddr)
+-	mustConnGRPC(ctx, &svc.adSvcConn, svc.adSvcAddr)
++	mustConnGRPC(ctx, &svc.currencySvcConn, svc.currencySvcAddr, "")
++	mustConnGRPC(ctx, &svc.productCatalogSvcConn, svc.productCatalogSvcAddr, "")
++	mustConnGRPC(ctx, &svc.cartSvcConn, svc.cartSvcAddr, "")
++	mustConnGRPC(ctx, &svc.recommendationSvcConn, svc.recommendationSvcAddr, "")
++	mustConnGRPC(ctx, &svc.shippingSvcConn, svc.shippingSvcAddr, "SHIPPING")
++	mustConnGRPC(ctx, &svc.checkoutSvcConn, svc.checkoutSvcAddr, "CHECKOUT")
++	mustConnGRPC(ctx, &svc.adSvcConn, svc.adSvcAddr, "")
+ 
+ 	r := mux.NewRouter()
+ 	r.HandleFunc(baseUrl+"/", svc.homeHandler).Methods(http.MethodGet, http.MethodHead)
+@@ -175,7 +175,7 @@ func initStats(log logrus.FieldLogger) {
+ 
+ func initTracing(log logrus.FieldLogger, ctx context.Context, svc *frontendServer) (*sdktrace.TracerProvider, error) {
+ 	mustMapEnv(&svc.collectorAddr, "COLLECTOR_SERVICE_ADDR")
+-	mustConnGRPC(ctx, &svc.collectorConn, svc.collectorAddr)
++	mustConnGRPC(ctx, &svc.collectorConn, svc.collectorAddr, "")
+ 	exporter, err := otlptracegrpc.New(
+ 		ctx,
+ 		otlptracegrpc.WithGRPCConn(svc.collectorConn))
+@@ -221,7 +221,7 @@ func mustMapEnv(target *string, envKey string) {
+ 	*target = v
+ }
+ 
+-func mustConnGRPC(ctx context.Context, conn **grpc.ClientConn, addr string) {
++func mustConnGRPC(ctx context.Context, conn **grpc.ClientConn, addr, retryDestination string) {
+ 	var err error
+ 	ctx, cancel := context.WithTimeout(ctx, time.Second*3)
+ 	defer cancel()
+@@ -232,11 +232,14 @@ func mustConnGRPC(ctx context.Context, conn **grpc.ClientConn, addr string) {
+ 		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
+ 	}
+ 
+-	serviceConfig := BuildServiceConfig()
+-	if serviceConfig != "" {
+-		opts = append(opts, grpc.WithDefaultServiceConfig(serviceConfig))
+-	} else {
+-		log.Warn("service config not provided, proceeding with default settings")
++	if retryDestination != "" {
++		serviceConfig, configErr := BuildServiceConfig(retryDestination)
++		if configErr != nil {
++			log.Fatal(configErr)
++		}
++		if serviceConfig != "" {
++			opts = append(opts, grpc.WithDefaultServiceConfig(serviceConfig))
++		}
+ 	}
+ 
+ 	*conn, err = grpc.DialContext(ctx, addr, opts...)
+diff --git a/src/frontend/svcconfig.go b/src/frontend/svcconfig.go
+index 30afdae6be68676e129eb2e36ee03550c998086b..e8fb597411c24cf06c804ba0656cb5188193e7e2 100644
+--- a/src/frontend/svcconfig.go
++++ b/src/frontend/svcconfig.go
+@@ -1,76 +1,44 @@
+ package main
+ 
+ import (
++	"encoding/json"
+ 	"fmt"
++	"math"
+ 	"os"
+ 	"strconv"
++	"time"
+ )
+ 
+-func GetEnv(key string, fallback string) string {
+-	value := os.Getenv(key)
+-	if value == "" {
+-		return fallback
++// BuildServiceConfig returns no retry policy when the destination's variables are empty.
++func BuildServiceConfig(destination string) (string, error) {
++	prefix := "GRPC_" + destination + "_"
++	attemptsText := os.Getenv(prefix + "MAX_ATTEMPTS")
++	initial := os.Getenv(prefix + "INITIAL_BACKOFF")
++	maximum := os.Getenv(prefix + "MAX_BACKOFF")
++	multiplierText := os.Getenv(prefix + "BACKOFF_MULTIPLIER")
++	if attemptsText == "" && initial == "" && maximum == "" && multiplierText == "" {
++		return "", nil
+ 	}
+-	return value
+-}
+-
+-func GetEnvInt(key string) (int, bool) {
+-	valueStr := os.Getenv(key)
+-	if value, err := strconv.Atoi(valueStr); err == nil {
+-		return value, true
++	attempts, attemptErr := strconv.Atoi(attemptsText)
++	multiplier, multiplierErr := strconv.ParseFloat(multiplierText, 64)
++	initialDuration, initialErr := time.ParseDuration(initial)
++	maxDuration, maxErr := time.ParseDuration(maximum)
++	if attemptErr != nil || attempts < 2 || attempts > 5 || multiplierErr != nil ||
++		multiplier <= 0 || math.IsNaN(multiplier) || math.IsInf(multiplier, 0) ||
++		initialErr != nil || maxErr != nil || initialDuration <= 0 || maxDuration <= 0 {
++		return "", fmt.Errorf("invalid or incomplete gRPC retry policy for %s", destination)
+ 	}
+-	return 0, false
+-}
+-
+-func GetEnvFloat(key string) (float64, bool) {
+-	valueStr := os.Getenv(key)
+-	if value, err := strconv.ParseFloat(valueStr, 64); err == nil {
+-		return value, true
++	policy := map[string]any{
++		"maxAttempts": attempts, "initialBackoff": grpcSeconds(initialDuration), "maxBackoff": grpcSeconds(maxDuration),
++		"backoffMultiplier": multiplier, "retryableStatusCodes": []string{"UNAVAILABLE"},
+ 	}
+-	return 0.0, false
++	config := map[string]any{"methodConfig": []any{map[string]any{
++		"name": []any{map[string]any{}}, "retryPolicy": policy,
++	}}}
++	body, err := json.Marshal(config)
++	return string(body), err
+ }
+ 
+-func BuildServiceConfig() string {
+-	maxAttempts, maxAttemptsOk := GetEnvInt("GRPC_MAX_ATTEMPTS")
+-	initialBackoff := GetEnv("GRPC_INITIAL_BACKOFF", "")
+-	maxBackoff := GetEnv("GRPC_MAX_BACKOFF", "")
+-	backoffMultiplier, backoffMultiplierOk := GetEnvFloat("GRPC_BACKOFF_MULTIPLIER")
+-
+-	hedgingMaxAttempts := GetEnv("GRPC_HEDGING_MAX_ATTEMPTS", "")
+-	hedgingDelay := GetEnv("GRPC_HEDGING_DELAY", "")
+-
+-	if maxAttemptsOk && backoffMultiplierOk && initialBackoff != "" && maxBackoff != "" {
+-		return fmt.Sprintf(`{
+-			"methodConfig": [
+-				{
+-					"name": [
+-						{ "service": "", "method": "" }
+-					],
+-					"retryPolicy": {
+-						"MaxAttempts": %d,
+-						"InitialBackoff": "%s",
+-						"MaxBackoff": "%s",
+-						"BackoffMultiplier": %f,
+-						"RetryableStatusCodes": [ "UNAVAILABLE" ]
+-					}
+-				}
+-			]
+-		}`, maxAttempts, initialBackoff, maxBackoff, backoffMultiplier)
+-	} else if hedgingMaxAttempts != "" && hedgingDelay != "" {
+-		return fmt.Sprintf(`{
+-			"methodConfig": [
+-				{
+-					"name": [
+-						{ "service": "", "method": "" }
+-					],
+-					"hedgingPolicy": {
+-						"MaxAttempts": %d,
+-						"HedgingDelay": "%s",
+-					}
+-				}
+-			]
+-		}`, hedgingMaxAttempts, hedgingDelay)
+-	} else {
+-		return ""
+-	}
++func grpcSeconds(duration time.Duration) string {
++	return strconv.FormatFloat(duration.Seconds(), 'f', -1, 64) + "s"
+ }
+diff --git a/src/frontend/svcconfig_test.go b/src/frontend/svcconfig_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..2b173b766cf579b966dc98925c17156f36f775fd
+--- /dev/null
++++ b/src/frontend/svcconfig_test.go
+@@ -0,0 +1,83 @@
++package main
++
++import (
++	"context"
++	"net"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"google.golang.org/grpc"
++	"google.golang.org/grpc/codes"
++	"google.golang.org/grpc/credentials/insecure"
++	healthpb "google.golang.org/grpc/health/grpc_health_v1"
++	"google.golang.org/grpc/status"
++	"google.golang.org/grpc/test/bufconn"
++)
++
++type unavailableHealth struct {
++	healthpb.UnimplementedHealthServer
++	calls atomic.Int32
++}
++
++func (s *unavailableHealth) Check(context.Context, *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) {
++	s.calls.Add(1)
++	return nil, status.Error(codes.Unavailable, "test-only unavailability")
++}
++
++func TestDestinationPoliciesDoNotOverwriteOrInherit(t *testing.T) {
++	setPolicy := func(destination, attempts string) {
++		for name, value := range map[string]string{
++			"MAX_ATTEMPTS": attempts, "INITIAL_BACKOFF": "0.001s",
++			"MAX_BACKOFF": "0.001s", "BACKOFF_MULTIPLIER": "1",
++		} {
++			if attempts == "" {
++				value = ""
++			}
++			t.Setenv("GRPC_"+destination+"_"+name, value)
++		}
++	}
++	setPolicy("PAYMENT", "2")
++	setPolicy("SHIPPING", "5")
++	t.Setenv("GRPC_MAX_ATTEMPTS", "4")
++	assertAttempts := func(dest string, expected int32) {
++		t.Helper()
++		config, err := BuildServiceConfig(dest)
++		if err != nil {
++			t.Fatal(err)
++		}
++		listener := bufconn.Listen(1024 * 1024)
++		server := grpc.NewServer()
++		service := &unavailableHealth{}
++		healthpb.RegisterHealthServer(server, service)
++		go server.Serve(listener)
++		defer server.Stop()
++		var options = []grpc.DialOption{
++			grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
++			grpc.WithTransportCredentials(insecure.NewCredentials()),
++		}
++		if config != "" {
++			options = append(options, grpc.WithDefaultServiceConfig(config))
++		}
++		conn, err := grpc.NewClient("passthrough:///test", options...)
++		if err != nil {
++			t.Fatal(err)
++		}
++		defer conn.Close()
++		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
++		defer cancel()
++		_, err = healthpb.NewHealthClient(conn).Check(ctx, &healthpb.HealthCheckRequest{})
++		if status.Code(err) != codes.Unavailable || service.calls.Load() != expected {
++			t.Fatalf("%s: got %d calls and %v, want %d calls and UNAVAILABLE", dest, service.calls.Load(), err, expected)
++		}
++	}
++	assertAttempts("PAYMENT", 2)
++	assertAttempts("SHIPPING", 5)
++	setPolicy("PAYMENT", "")
++	assertAttempts("PAYMENT", 1)
++	assertAttempts("SHIPPING", 5)
++	t.Setenv("GRPC_PAYMENT_MAX_ATTEMPTS", "2")
++	if _, err := BuildServiceConfig("PAYMENT"); err == nil {
++		t.Fatal("partial configuration was accepted")
++	}
++}

@@ -16,7 +16,8 @@ spec:
       serviceAccountName: checkoutservice
       containers:
         - name: server
-          image: ghcr.io/cmendesce/microservices-demo/checkoutservice:6f409a642c44a6cb3a1a16cfeca61e65b88f2bd7
+          image: resiliencebench/checkoutservice:destination-retry-v1
+          imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 5050
           readinessProbe:
@@ -40,13 +41,21 @@ spec:
             value: "currencyservice:7000"
           - name: CART_SERVICE_ADDR
             value: "cartservice:7070"
-          - name: GRPC_MAX_ATTEMPTS
+          - name: GRPC_PAYMENT_MAX_ATTEMPTS
             value: ""
-          - name: GRPC_INITIAL_BACKOFF
+          - name: GRPC_PAYMENT_INITIAL_BACKOFF
             value: ""
-          - name: GRPC_MAX_BACKOFF
+          - name: GRPC_PAYMENT_MAX_BACKOFF
             value: ""
-          - name: GRPC_BACKOFF_MULTIPLIER
+          - name: GRPC_PAYMENT_BACKOFF_MULTIPLIER
+            value: ""
+          - name: GRPC_SHIPPING_MAX_ATTEMPTS
+            value: ""
+          - name: GRPC_SHIPPING_INITIAL_BACKOFF
+            value: ""
+          - name: GRPC_SHIPPING_MAX_BACKOFF
+            value: ""
+          - name: GRPC_SHIPPING_BACKOFF_MULTIPLIER
             value: ""
         - name: envoy
           image: ghcr.io/cmendesce/server-app:latest
@@ -67,6 +76,9 @@ spec:
   selector:
     app: checkoutservice
   ports:
+  - name: envoy
+    port: 9901
+    targetPort: 9901
   - name: grpc
     port: 5050
     targetPort: 10000

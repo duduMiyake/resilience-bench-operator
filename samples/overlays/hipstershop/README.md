@@ -18,7 +18,9 @@ Setting `STORAGE_TYPE` to local alone does not make this sample local: its scrip
 
 See the [experiment guide](../../../docs/running-experiments.md) for the pause/cleanup sequence, result collection and information needed to reproduce a study.
 
-After preparing these prerequisites, apply the CRDs and this overlay with:
+After preparing storage and the three images described below, apply the CRDs
+and the overlay. For a pilot, render and reduce the Benchmark budget **before**
+applying it; the sample is not limited to the few checks listed below.
 
 ```bash
 kubectl apply -f ./crd
@@ -30,11 +32,48 @@ The overlay intentionally does not set `nodeSelector`, `affinity`, or
 operator, and k6 jobs on any schedulable worker, including Vagrant clusters
 whose workers have no custom labels.
 
-The operator image defaults to
-`eduardomiyake/resiliencebench-operator:scenario-selection`, which is pulled
-from a registry. For a local image, create a separate local overlay or patch
-the deployment image after loading it into the cluster.
+Use the paired development images or verified registry digests, as described below.
 
 To pin workloads to particular nodes, label those nodes and create a dedicated
 overlay that adds compatible `nodeSelector` or affinity rules. Do not add
 cluster-specific node names or labels back to this portable overlay.
+
+## Piloto com Shipping
+
+Este overlay substitui a configuracao da campanha, sem outro modo de execucao.
+Os tres conectores variaveis fornecem 25 × 25 × 9 configuracoes nominais.
+Frontend → Shipping fica fixo, inicialmente sem uma politica explicita de retry;
+ajuste esse valor apenas antes da campanha. O objetivo segue
+`checkout_success_rate` e `iteration_duration_p(95)`; os contadores da jornada
+completa e `journey_success_rate` sao diagnosticos. Se houve jornadas, mas
+nenhuma chegou ao checkout, o score recebe taxa zero e `checkout_attempted: 0`
+distingue esse caso de falhas em checkouts realizados. Resultados antigos nao
+sao intercambiaveis com o novo perfil de carga e falha.
+
+As tags abaixo sao locais, nao imagens publicadas. Para reproduzir a
+adaptacao, use o [patch versionado](online-boutique-destination-retry.patch)
+sobre o commit exato da Online Boutique. A partir da raiz do Operator:
+
+```bash
+repository_root="$PWD"
+git clone https://github.com/cmendesce/microservices-demo.git ../resiliencebench-boutique
+git -C ../resiliencebench-boutique switch --detach 6f409a642c44a6cb3a1a16cfeca61e65b88f2bd7
+git -C ../resiliencebench-boutique apply --check "$repository_root/samples/overlays/hipstershop/online-boutique-destination-retry.patch"
+git -C ../resiliencebench-boutique apply "$repository_root/samples/overlays/hipstershop/online-boutique-destination-retry.patch"
+docker build -t resiliencebench/frontend:destination-retry-v1 ../resiliencebench-boutique/src/frontend
+docker build -t resiliencebench/checkoutservice:destination-retry-v1 ../resiliencebench-boutique/src/checkoutservice
+mvn -f resilience-bench/operator/pom.xml -Dimage=resiliencebench/operator:destination-retry-v1 package
+```
+
+Carregue as tres imagens nos workers do cluster de teste ou substitua seus
+nomes por digests de imagens verificadas em seu registry. Nao execute com as
+imagens antigas: elas nao leem as novas variaveis.
+
+Em namespace dedicado, com fila e prefixo de cache novos, execute primeiro
+um recorte pequeno: verifique Payment com duas tentativas e Shipping com
+cinco, depois Payment sem retry e Shipping com cinco. Valide as janelas em
+cada alvo separadamente antes de combinar os alvos, e confirme que o
+Envoy aplica e restaura a falha observada pelo cliente. Os tempos no manifesto
+sao valores iniciais de piloto. No caso de falha apos o pagamento, conte chamadas
+de `PlaceOrder` e `Charge` para detectar uma eventual repeticao do pagamento;
+nao deduza essa atribuicao a partir de um erro HTTP no k6.
