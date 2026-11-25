@@ -50,6 +50,16 @@ Siga os padroes ja existentes antes de introduzir novos estilos.
 - Evite criar frameworks internos ou abstracoes grandes para mudancas pequenas.
 - Preserve o comportamento das estrategias existentes ao adicionar novas.
 
+
+## Aplicacao sob teste
+
+O ResilienceBench mede como uma aplicacao se comporta sob carga e falhas. Nao proponha nem implemente mudancas na arquitetura ou nas regras de negocio da aplicacao para corrigir, esconder ou evitar um comportamento observado no benchmark.
+
+- Antes de propor uma alteracao na aplicacao, verifique se o cenario pode ser executado com a configuracao existente, os manifests ou o script de carga. Se for indispensavel adaptar a aplicacao, limite a mudanca ao necessario para configurar, executar ou observar o teste.
+- Exemplo permitido: fazer os clientes gRPC lerem variaveis de ambiente por destino para testar politicas de retry independentes, sem mudar as etapas da compra nem o tratamento de seus resultados.
+- Exemplo fora de escopo: alterar o Checkout para impedir que uma falha no envio apos o pagamento provoque uma nova execucao de `PlaceOrder`. Se o retry repetir um pagamento simulado, registre isso como achado e confirme pelas chamadas ou logs dos servicos. O k6 mede o resultado visivel ao usuario e nao deve inferir pagamentos repetidos pela resposta HTTP.
+- Se um experimento exigir mudar a arquitetura, o fluxo de negocio ou a semantica dos erros, trate isso como uma variante separada e peca aprovacao explicita antes de inclui-la.
+
 ## Estrategias de selecao
 
 Estrategias ficam em:
