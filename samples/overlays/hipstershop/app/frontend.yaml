@@ -24,7 +24,8 @@ spec:
       serviceAccountName: frontend
       containers:
         - name: server
-          image: ghcr.io/cmendesce/microservices-demo/frontend:6f409a642c44a6cb3a1a16cfeca61e65b88f2bd7
+          image: resiliencebench/frontend:destination-retry-v1
+          imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 8080
           readinessProbe:
@@ -62,14 +63,22 @@ spec:
             value: "adservice:9555"
           - name: SHOPPING_ASSISTANT_SERVICE_ADDR
             value: "shoppingassistantservice:80"
-          # - name: GRPC_MAX_ATTEMPTS
-          #   value: "5"
-          # - name: GRPC_INITIAL_BACKOFF
-          #   value: "0.3s"
-          # - name: GRPC_MAX_BACKOFF
-          #   value: "10s"
-          # - name: GRPC_BACKOFF_MULTIPLIER
-          #   value: "1.2"
+          - name: GRPC_CHECKOUT_MAX_ATTEMPTS
+            value: ""
+          - name: GRPC_CHECKOUT_INITIAL_BACKOFF
+            value: ""
+          - name: GRPC_CHECKOUT_MAX_BACKOFF
+            value: ""
+          - name: GRPC_CHECKOUT_BACKOFF_MULTIPLIER
+            value: ""
+          - name: GRPC_SHIPPING_MAX_ATTEMPTS
+            value: ""
+          - name: GRPC_SHIPPING_INITIAL_BACKOFF
+            value: ""
+          - name: GRPC_SHIPPING_MAX_BACKOFF
+            value: ""
+          - name: GRPC_SHIPPING_BACKOFF_MULTIPLIER
+            value: ""
           # # ENV_PLATFORM: One of: local, gcp, aws, azure, onprem, alibaba
           # # When not set, defaults to "local" unless running in GKE, otherwies auto-sets to gcp
           - name: ENV_PLATFORM

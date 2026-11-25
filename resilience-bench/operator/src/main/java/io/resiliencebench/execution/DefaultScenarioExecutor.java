@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.resiliencebench.support.Annotations.*;
-import static java.util.Objects.nonNull;
 
 @Service
 public class DefaultScenarioExecutor implements ScenarioExecutor {
@@ -94,14 +93,29 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
       return;
     }
 
-    executePreparationSteps(scenario, executionQueue);
-    var executionQueueItem = executionQueue.getItem(scenario.getMetadata().getName());
-    var job = k6JobFactory.create(scenario, workload, executionQueueItem);
-    var jobsClient = kubernetesClient.batch().v1().jobs();
-    jobsClient.inNamespace(job.getMetadata().getNamespace()).withName(job.getMetadata().getName()).delete();
-    jobsClient.resource(job).create();
-    logger.info("Job created: {}", job.getMetadata().getName());
-    jobsClient.resource(job).watch(createJobCompletionWatcher(onCompletion));
+    try {
+      executePreparationSteps(scenario, executionQueue);
+      var executionQueueItem = executionQueue.getItem(scenario.getMetadata().getName());
+      var job = k6JobFactory.create(scenario, workload, executionQueueItem);
+      var jobsClient = kubernetesClient.batch().v1().jobs();
+      jobsClient.inNamespace(job.getMetadata().getNamespace()).withName(job.getMetadata().getName()).delete();
+      var handle = jobsClient.resource(job);
+      handle.create();
+      try {
+        handle.watch(createJobCompletionWatcher(onCompletion));
+      } catch (RuntimeException watchError) {
+        try {
+          handle.delete();
+        } catch (RuntimeException cleanup) {
+          watchError.addSuppressed(cleanup);
+        }
+        throw watchError;
+      }
+      logger.info("Job created: {}", job.getMetadata().getName());
+    } catch (RuntimeException error) {
+      handleScenarioFailure(scenario, executionQueue, error);
+      throw error;
+    }
   }
 
   void executeTemporal(Scenario scenario, ExecutionQueue queue, Workload workload, Runnable onCompletion) {
@@ -126,11 +140,7 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
         throw new IllegalStateException("k6 completed without a verified temporal fault timeline");
       }
 
-      for (var step : stepRegistry.getPostExecutionSteps()) {
-        if (step instanceof EnvironmentPostStep) {
-          step.execute(scenario, queue);
-        }
-      }
+      restoreEnvironment(scenario, queue);
       for (var step : stepRegistry.getPostExecutionSteps()) {
         if (step instanceof ResultFileStep resultFileStep) {
           resultFileStep.storeResult(scenario, queue, resultMetrics);
@@ -164,20 +174,7 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
             error.addSuppressed(cleanup);
           }
         }
-        for (var step : stepRegistry.getPostExecutionSteps()) {
-          if (step instanceof EnvironmentPostStep) {
-            try {
-              step.execute(scenario, queue);
-            } catch (RuntimeException cleanup) {
-              error.addSuppressed(cleanup);
-            }
-          }
-        }
-        try {
-          markTemporalFailed(namespace, queue.getMetadata().getName(), scenarioName, error);
-        } catch (RuntimeException cleanup) {
-          error.addSuppressed(cleanup);
-        }
+        handleScenarioFailure(scenario, queue, error);
         logger.error("Temporal fault scenario {} failed; stopping its queue without collecting a result",
                 scenarioName, error);
       } finally {
@@ -193,7 +190,27 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
     }
   }
 
-  private void markTemporalFailed(String namespace, String queueName, String scenarioName, Exception error) {
+  private void restoreEnvironment(Scenario scenario, ExecutionQueue queue) {
+    stepRegistry.getPostExecutionSteps().stream()
+            .filter(EnvironmentPostStep.class::isInstance)
+            .forEach(step -> step.execute(scenario, queue));
+  }
+
+  private void handleScenarioFailure(Scenario scenario, ExecutionQueue queue, Exception error) {
+    try {
+      restoreEnvironment(scenario, queue);
+    } catch (RuntimeException cleanup) {
+      error.addSuppressed(cleanup);
+    }
+    try {
+      markScenarioFailed(scenario.getMetadata().getNamespace(), queue.getMetadata().getName(),
+              scenario.getMetadata().getName(), error);
+    } catch (RuntimeException cleanup) {
+      error.addSuppressed(cleanup);
+    }
+  }
+
+  private void markScenarioFailed(String namespace, String queueName, String scenarioName, Exception error) {
     var latest = executionRepository.get(namespace, queueName);
     var item = latest.getItem(scenarioName);
     item.setStatus(ExecutionQueueItem.Status.FAILED);
@@ -219,22 +236,35 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
     return new Watcher<>() {
       @Override
       public void eventReceived(Action action, Job resource) {
-        if (action.equals(Action.MODIFIED) && nonNull(resource.getStatus().getCompletionTime())) {
-          if (!completionHandled.compareAndSet(false, true)) {
-            logger.debug("Ignoring duplicate completion event for job: {}", resource.getMetadata().getName());
-            return;
-          }
-          logger.info("Finished job: {}", resource.getMetadata().getName());
-          var namespace = resource.getMetadata().getNamespace();
-          var scenarioName = resource.getMetadata().getAnnotations().get(SCENARIO);
-          var scenario = scenarioRepository.get(namespace, scenarioName);
-          var executionQueue = executionRepository.get(
-                  namespace,
-                  scenario.getMetadata().getAnnotations().get(OWNED_BY)
-          );
-          executePostExecutionSteps(scenario, executionQueue);
-          onCompletion.run();
+        var status = resource.getStatus();
+        if ((action != Action.MODIFIED && action != Action.ADDED) || status == null) {
+          return;
         }
+        var failed = status.getConditions().stream()
+                .anyMatch(condition -> "Failed".equals(condition.getType()) && "True".equals(condition.getStatus()));
+        if (!failed && status.getCompletionTime() == null) {
+          return;
+        }
+        if (!completionHandled.compareAndSet(false, true)) {
+          logger.debug("Ignoring duplicate completion event for job: {}", resource.getMetadata().getName());
+          return;
+        }
+        var namespace = resource.getMetadata().getNamespace();
+        var scenarioName = resource.getMetadata().getAnnotations().get(SCENARIO);
+        var scenario = scenarioRepository.get(namespace, scenarioName);
+        var queue = executionRepository.get(namespace, scenario.getMetadata().getAnnotations().get(OWNED_BY));
+        if (failed) {
+          handleScenarioFailure(scenario, queue, new IllegalStateException("k6 Job failed: " + resource.getMetadata().getName()));
+          return;
+        }
+        try {
+          executePostExecutionSteps(scenario, queue);
+        } catch (RuntimeException error) {
+          handleScenarioFailure(scenario, queue, error);
+          logger.error("Scenario {} failed during result collection or cleanup", scenarioName, error);
+          return;
+        }
+        onCompletion.run();
       }
       @Override
       public void onClose(WatcherException cause) {
@@ -249,6 +279,12 @@ public class DefaultScenarioExecutor implements ScenarioExecutor {
   }
 
   private void executePostExecutionSteps(Scenario scenario, ExecutionQueue queue) {
-    stepRegistry.getPostExecutionSteps().forEach(step -> step.execute(scenario, queue));
+    restoreEnvironment(scenario, queue);
+    stepRegistry.getPostExecutionSteps().stream()
+            .filter(ResultFileStep.class::isInstance)
+            .forEach(step -> step.execute(scenario, queue));
+    stepRegistry.getPostExecutionSteps().stream()
+            .filter(step -> !(step instanceof EnvironmentPostStep) && !(step instanceof ResultFileStep))
+            .forEach(step -> step.execute(scenario, queue));
   }
 }

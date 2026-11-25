@@ -64,8 +64,8 @@ spec:
 
       containers:
       - name: resiliencebench-operator
-        image: eduardomiyake/resiliencebench-operator:scenario-selection
-        imagePullPolicy: Always
+        image: resiliencebench/operator:destination-retry-v1
+        imagePullPolicy: IfNotPresent
         env:
         - name: STORAGE_TYPE
           value: "cloud"

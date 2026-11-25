@@ -49,12 +49,6 @@ const errorIndex = new Counter('custom_index_error');
 const successAd = new Counter('custom_ad_success');
 const errorAd = new Counter('custom_ad_error');
 
-const successPayment = new Counter('custom_payment_cart_success');
-const errorPayment = new Counter('custom_payment_cart_error');
-
-const successShippingOnCheckout = new Counter('custom_shipping_checkout_success');
-const errorShippingOnCheckout = new Counter('custom_shipping_checkout_error');
-
 const successShippingOnCart = new Counter('custom_shipping_cart_success');
 const errorShippingOnCart = new Counter('custom_shipping_cart_error');
 
@@ -87,19 +81,33 @@ const successCheckout = new Counter('custom_checkout_success');
 const errorCheckout = new Counter('custom_checkout_error');
 
 const sessionDuration = new Trend('session_duration');
+const journeyStarts = new Counter('custom_journey_started');
+const journeyCompletions = new Counter('custom_journey_completed');
+const checkoutAttempts = new Counter('custom_checkout_attempted');
+const checkoutSkipped = new Counter('custom_checkout_skipped');
 
 export default function () {
-  const startTime = new Date();
-  group('main_session', function () {
+  const startTime = Date.now();
+  journeyStarts.add(1);
+  let attempted = false;
+  let completed = false;
+  try {
+    group('main_session', function () {
       index();
       browseProduct();
-      addToCart();
-      viewCart();
+      const productId = randomProduct();
+      if (!addToCart(productId) || !viewCart(productId)) {
+        return;
+      }
       setCurrency();
-      checkout();
-  });
-  const endTime = new Date();
-  sessionDuration.add(endTime - startTime);
+      attempted = true;
+      completed = checkout();
+    });
+  } finally {
+    checkoutSkipped.add(attempted ? 0 : 1);
+    journeyCompletions.add(completed ? 1 : 0);
+    sessionDuration.add(Date.now() - startTime);
+  }
 }
 
 function randomCurrency() {
@@ -140,7 +148,7 @@ function index() {
 
 function browseProduct() {
   const res = http.get(`http://${HOST}/product/${randomProduct()}`);
-  const body = parseHTML(res.body);
+  const body = parseHTML(res.body || '');
 
   const ad = body.find('body > main > div.ad > div > div > strong');
   successAd.add(ad.text() === 'Ad' ? 1 : 0);
@@ -161,38 +169,33 @@ function browseProduct() {
   errorProduct.add(successfulProduct ? 0 : 1);
 }
 
-function addToCart() {
-  const body = { product_id: randomProduct(), quantity: randomQuantity() };
-  const res = http.post(`http://${HOST}/cart`, body);
-
-  const errorShipping = res.body.includes('failed to get shipping quote');
-  successShippingOnCart.add(errorShipping ? 0 : 1);
-  errorShippingOnCart.add(errorShipping ? 1 : 0);
-
-  if (res.status === 200) {
-    httpDurationCart.add(res.timings.duration);
-  } else {
-    httpErrorDurationCart.add(res.timings.duration);
-  }
-  successCart.add(res.status === 200 ? 1 : 0);
-  errorCart.add(res.status !== 200 ? 1 : 0);
+function recordStage(response, ok, successDuration, errorDuration, successes, errors) {
+  (ok ? successDuration : errorDuration).add(response.timings.duration);
+  successes.add(ok ? 1 : 0);
+  errors.add(ok ? 0 : 1);
 }
 
-function viewCart() {
+function addToCart(productId) {
+  const body = { product_id: productId, quantity: randomQuantity() };
+  // Keep the original redirect request and the separate GET /cart below.
+  const res = http.post(`http://${HOST}/cart`, body);
+  const accepted = res.status === 200;
+  recordStage(res, accepted, httpDurationCart, httpErrorDurationCart, successCart, errorCart);
+  return accepted;
+}
+
+function viewCart(productId) {
   const res = http.get(`http://${HOST}/cart`);
+  const doc = parseHTML(res.body || '');
+  const item = doc.find(`.cart-summary-item-row a[href$="/product/${productId}"]`);
+  const quote = doc.find('.cart-summary-shipping-row .text-right').text().trim();
+  const validQuote = res.status === 200 && /[0-9]/.test(quote);
+  successShippingOnCart.add(validQuote ? 1 : 0);
+  errorShippingOnCart.add(validQuote ? 0 : 1);
 
-  const errorShipping = res.body.includes('failed to get shipping quote');
-
-  successShippingOnCart.add(errorShipping ? 0 : 1);
-  errorShippingOnCart.add(errorShipping ? 1 : 0);
-
-  if (res.status === 200) {
-    httpDurationViewCart.add(res.timings.duration);
-  } else {
-    httpErrorDurationViewCart.add(res.timings.duration);
-  }
-  successViewCart.add(res.status === 200 ? 1 : 0);
-  errorViewCart.add(res.status !== 200 ? 1 : 0);
+  const confirmed = validQuote && item.size() > 0;
+  recordStage(res, confirmed, httpDurationViewCart, httpErrorDurationViewCart, successViewCart, errorViewCart);
+  return confirmed;
 }
 
 function setCurrency() {
@@ -207,29 +210,18 @@ function setCurrency() {
 }
 
 function checkout() {
+  checkoutAttempts.add(1);
   const res = http.post(`http://${HOST}/cart/checkout`, creditCard);
-  check(res, {
-    'checkout is 200': (r) => r.status === 200,
-  });
+  const httpOk = res.status === 200;
+  check(res, { 'checkout is 200': () => httpOk });
+  recordStage(res, httpOk, httpDurationCheckout, httpErrorDurationCheckout, successCheckout, errorCheckout);
 
-  if (res.status === 200) {
-    const errorShipping = res.body.includes('failed to get shipping quote');
-    const errorPaymentFlag = res.body.includes('failed to charge card');
-
-    successShippingOnCheckout.add(errorShipping ? 0 : 1);
-    errorShippingOnCheckout.add(errorShipping ? 1 : 0);
-    successPayment.add(errorPayment ? 0 : 1);
-    errorPayment.add(errorPaymentFlag ? 1 : 0);
-    httpDurationCheckout.add(res.timings.duration);
-    successCheckout.add(res.status === 200 ? 1 : 0);
-    errorCheckout.add(res.status !== 200 ? 1 : 0);
-  } else {
-    console.error(`Failed to checkout: ${res.status}`);
-    httpErrorDurationCheckout.add(res.timings.duration);
-    errorShippingOnCheckout.add(1);
-    errorPayment.add(1);
-    errorCheckout.add(1);
+  if (!httpOk) {
+    return false;
   }
+  const doc = parseHTML(res.body || '');
+  const details = doc.find('.order-complete-section .border-bottom-solid .text-right');
+  return Boolean(details.eq(0).text().trim() && details.eq(1).text().trim());
 }
 
 export async function handleSummary(data) {
@@ -244,14 +236,28 @@ export async function handleSummary(data) {
     }
   }
 
-  metrics.session_duration = data.metrics.session_duration.values.med;
+  metrics.session_duration = data.metrics.session_duration?.values.med;
 
   for (const metricName of Object.keys(metrics)) {
     if (metricName.endsWith('success')) {
       const page = metricName.replace('_success', '');
-      const rate = metrics[metricName] / (metrics[metricName] + metrics[`${page}_error`]);
-      metrics[`${page}_success_rate`] = rate;
+      const attempts = metrics[metricName] + (metrics[`${page}_error`] || 0);
+      if (attempts > 0) metrics[`${page}_success_rate`] = metrics[metricName] / attempts;
     }
+  }
+
+  metrics.journey_started ??= 0;
+  metrics.journey_completed ??= 0;
+  metrics.checkout_attempted ??= 0;
+  metrics.checkout_skipped ??= 0;
+  if (metrics.journey_started === 0 || !data.metrics.iteration_duration) {
+    throw new Error('No complete journey samples were recorded');
+  }
+  metrics.journey_success_rate = metrics.journey_completed / metrics.journey_started;
+  if (metrics.checkout_attempted === 0) {
+    // A valid context with all checkouts skipped must still be scoreable.
+    // The count distinguishes this score input from failed checkout attempts.
+    metrics.checkout_success_rate = 0;
   }
 
   for (const metricName of Object.keys(data.metrics.iteration_duration.values)) {

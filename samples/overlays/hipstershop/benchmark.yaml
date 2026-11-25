@@ -40,11 +40,11 @@ metadata:
   name: frontendservice
   annotations:
     resiliencebench.io/virtual-service: "frontendservice" 
-    resiliencebench.io/container: "envoy"
+    resiliencebench.io/container: "server"
 spec:
   selector:
     matchLabels:
-      app: frontendservice
+      app: frontend
 ---
 apiVersion: resiliencebench.io/v1beta1
 kind: ResilientService
@@ -53,6 +53,7 @@ metadata:
   annotations:
     resiliencebench.io/virtual-service: "checkoutservice" 
     resiliencebench.io/container: "server"
+    resiliencebench.io/envoy-service: checkoutservice
 spec:
   selector:
     matchLabels:
@@ -101,6 +102,7 @@ metadata:
   annotations:
     resiliencebench.io/virtual-service: "shippingservice" 
     resiliencebench.io/container: "envoy"
+    resiliencebench.io/envoy-service: shippingservice
 spec:
   selector:
     matchLabels:
@@ -164,45 +166,66 @@ spec:
   resultCache:
     enabled: true
     mode: readWrite
-    cachePrefix: /results/cache
-    runsPrefix: /results/runs
+    cachePrefix: /results/cache/shipping-v1
+    runsPrefix: /results/runs/shipping-v1
   scenarios:
     - name: retry-checkout
       fault:
         provider: envoy
         percentages: [50]
+        type: abort
+        grpcStatus: 14
+        windows:
+          - start: 2000
+            duration: 5000
+        repeat: true
         services:
           - paymentservice
           - checkoutservice
+          - shippingservice
       connectors:
         - name: retry-frontend-checkout
           includeBaseline: true
           source:
             name: frontendservice
             envs:
-              - name: GRPC_MAX_ATTEMPTS
+              - name: GRPC_CHECKOUT_MAX_ATTEMPTS
                 value: ["2", "3", "4", "5"]
-              - name: GRPC_INITIAL_BACKOFF
-                value: ["0.5s", "1s", "1.5s"]
-              - name: GRPC_MAX_BACKOFF
+              - name: GRPC_CHECKOUT_INITIAL_BACKOFF
+                value: ["0.1s", "0.5s", "1.5s"]
+              - name: GRPC_CHECKOUT_MAX_BACKOFF
                 value: ["15s"]
-              - name: GRPC_BACKOFF_MULTIPLIER
-                value: ["1", "1.5", "2.0"]
+              - name: GRPC_CHECKOUT_BACKOFF_MULTIPLIER
+                value: ["1", "2"]
           destination:
             name: checkoutservice
-
         - name: retry-checkout-payment
           includeBaseline: true
           source:
             name: checkoutservice
             envs:
-              - name: GRPC_MAX_ATTEMPTS
+              - name: GRPC_PAYMENT_MAX_ATTEMPTS
                 value: ["2", "3", "4", "5"]
-              - name: GRPC_INITIAL_BACKOFF
-                value: ["0.5s", "1s", "1.5s"]
-              - name: GRPC_MAX_BACKOFF
+              - name: GRPC_PAYMENT_INITIAL_BACKOFF
+                value: ["0.1s", "0.5s", "1.5s"]
+              - name: GRPC_PAYMENT_MAX_BACKOFF
                 value: ["15s"]
-              - name: GRPC_BACKOFF_MULTIPLIER
-                value: ["1", "1.5", "2.0"]
+              - name: GRPC_PAYMENT_BACKOFF_MULTIPLIER
+                value: ["1", "2"]
           destination:
             name: paymentservice
+        - name: retry-checkout-shipping
+          includeBaseline: true
+          source:
+            name: checkoutservice
+            envs:
+              - name: GRPC_SHIPPING_MAX_ATTEMPTS
+                value: ["2", "5"]
+              - name: GRPC_SHIPPING_INITIAL_BACKOFF
+                value: ["0.1s", "1.5s"]
+              - name: GRPC_SHIPPING_MAX_BACKOFF
+                value: ["15s"]
+              - name: GRPC_SHIPPING_BACKOFF_MULTIPLIER
+                value: ["1", "2"]
+          destination:
+            name: shippingservice
